@@ -273,61 +273,74 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
         {/* MODAL 2: Review Flagged Checkin Details */}
         {selectedFlagged && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
-            <div className="relative w-full max-w-sm bg-[var(--card)] border border-[var(--card-border)] rounded-2xl shadow-2xl p-5">
-              <button onClick={() => setSelectedFlagged(null)} className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--foreground)]"><X className="w-4 h-4" /></button>
-              <h3 className="text-xs font-extrabold uppercase tracking-wider text-amber-500 flex items-center gap-1.5 mb-4">
-                <ShieldAlert className="w-4 h-4" /> Review Check-in Exception
-              </h3>
+            <div className="relative w-full max-w-2xl bg-[var(--card)] border border-[var(--card-border)] rounded-2xl shadow-2xl overflow-hidden p-5">
+              <button onClick={() => setSelectedFlagged(null)} className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--foreground)] z-10"><X className="w-4 h-4" /></button>
               
-              <div className="space-y-3.5 text-xs">
-                <div>
-                  <p className="text-[9px] uppercase font-bold text-[var(--text-muted)]">Employee Details</p>
-                  <p className="font-bold text-[var(--foreground)] mt-0.5">{selectedFlagged.name} ({selectedFlagged.empId})</p>
-                  <p className="text-[10px] text-[var(--text-muted)]">{selectedFlagged.department}</p>
-                </div>
-                <div>
-                  <p className="text-[9px] uppercase font-bold text-[var(--text-muted)]">Capture Telemetry</p>
-                  <p className="font-bold text-[var(--foreground)] mt-0.5">Time: {selectedFlagged.time}</p>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 font-semibold">Flag reason: {selectedFlagged.note}</p>
-                  <p className="text-[10px] text-[var(--text-muted)] font-mono">Coordinates: {selectedFlagged.coordinates}</p>
-                </div>
-
-                {/* Webcam Image Evidence view */}
-                {selectedFlagged.photo && (
-                  <div>
-                    <p className="text-[9px] uppercase font-bold text-[var(--text-muted)] mb-1">Webcam Evidence Snapshot</p>
-                    <div className="relative aspect-video rounded-lg border border-[var(--card-border)] overflow-hidden bg-black flex items-center justify-center">
+              <div className="grid md:grid-cols-[1.1fr_0.9fr] gap-5">
+                {/* Left Column: Photograph */}
+                <div className="flex flex-col gap-2">
+                  <p className="text-[9px] uppercase font-bold text-[var(--text-muted)]">Webcam Evidence Snapshot</p>
+                  <div className="relative flex-1 min-h-[220px] rounded-xl border border-[var(--card-border)] overflow-hidden bg-black flex items-center justify-center">
+                    {selectedFlagged.photo ? (
                       <img
                         src={selectedFlagged.photo}
                         alt="Captured kiosk snapshot evidence"
-                        className="w-full h-full object-cover"
+                        className="absolute inset-0 w-full h-full object-cover"
                       />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-center p-4 text-[var(--text-muted)] gap-2">
+                        <Camera className="w-8 h-8 opacity-30" />
+                        <span className="text-[10px] font-bold">No live snapshot captured</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Column: Details & Actions */}
+                <div className="flex flex-col justify-between">
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-extrabold uppercase tracking-wider text-amber-500 flex items-center gap-1.5 border-b border-[var(--card-border)] pb-2">
+                      <ShieldAlert className="w-4 h-4" /> Review Check-in Exception
+                    </h3>
+                    
+                    <div className="space-y-3.5 text-xs">
+                      <div>
+                        <p className="text-[9px] uppercase font-bold text-[var(--text-muted)]">Employee Details</p>
+                        <p className="font-bold text-[var(--foreground)] mt-0.5">{selectedFlagged.name} ({selectedFlagged.empId})</p>
+                        <p className="text-[10px] text-[var(--text-muted)]">{selectedFlagged.department}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] uppercase font-bold text-[var(--text-muted)]">Capture Telemetry</p>
+                        <p className="font-bold text-[var(--foreground)] mt-0.5">Time: {selectedFlagged.time}</p>
+                        <p className="text-[10px] text-[var(--text-muted)] mt-0.5 font-semibold text-amber-500">Flag reason: {selectedFlagged.note}</p>
+                        <p className="text-[10px] text-[var(--text-muted)] font-mono">Coordinates: {selectedFlagged.coordinates}</p>
+                      </div>
                     </div>
                   </div>
-                )}
-              </div>
 
-              <div className="flex gap-2 mt-5">
-                <button
-                  onClick={() => {
-                    const uniqueKey = flaggedLogs.findIndex(f => f.name === selectedFlagged.name);
-                    setReviewedCheckins((prev) => [...prev, `${selectedFlagged.name}-${uniqueKey !== -1 ? uniqueKey : 0}`]);
-                    setSelectedFlagged(null);
-                  }}
-                  className="flex-1 h-9 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs uppercase flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Check className="w-3.5 h-3.5" /> Approve
-                </button>
-                <button
-                  onClick={() => {
-                    const uniqueKey = flaggedLogs.findIndex(f => f.name === selectedFlagged.name);
-                    setRejectedCheckins((prev) => [...prev, `${selectedFlagged.name}-${uniqueKey !== -1 ? uniqueKey : 0}`]);
-                    setSelectedFlagged(null);
-                  }}
-                  className="flex-1 h-9 rounded-lg bg-red-500 hover:bg-red-600 text-white font-bold text-xs uppercase flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Ban className="w-3.5 h-3.5" /> Reject
-                </button>
+                  <div className="flex gap-2 mt-6">
+                    <button
+                      onClick={() => {
+                        const uniqueKey = flaggedLogs.findIndex(f => f.name === selectedFlagged.name);
+                        setReviewedCheckins((prev) => [...prev, `${selectedFlagged.name}-${uniqueKey !== -1 ? uniqueKey : 0}`]);
+                        setSelectedFlagged(null);
+                      }}
+                      className="flex-1 h-9 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs uppercase flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Check className="w-3.5 h-3.5" /> Approve
+                    </button>
+                    <button
+                      onClick={() => {
+                        const uniqueKey = flaggedLogs.findIndex(f => f.name === selectedFlagged.name);
+                        setRejectedCheckins((prev) => [...prev, `${selectedFlagged.name}-${uniqueKey !== -1 ? uniqueKey : 0}`]);
+                        setSelectedFlagged(null);
+                      }}
+                      className="flex-1 h-9 rounded-lg bg-red-500 hover:bg-red-600 text-white font-bold text-xs uppercase flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Ban className="w-3.5 h-3.5" /> Reject
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

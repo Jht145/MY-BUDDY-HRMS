@@ -312,9 +312,16 @@ export function AdminPayrollTab() {
           className="flex items-center gap-2 h-9 px-3.5 text-xs font-semibold rounded-lg bg-[var(--card)] border border-[var(--card-border)] hover:bg-[var(--input-bg)] text-[var(--foreground)] shadow-xs transition-all cursor-pointer disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 text-[var(--brand-teal)] ${isRefreshing ? 'animate-spin' : ''}`} />
-          <span>{isRefreshing ? 'Syncing...' : 'Refresh Payroll'}</span>
+          <span>{isRefreshing ? 'Refreshing Records...' : 'Refresh Payroll'}</span>
         </button>
       </div>
+
+      {/* Animated Refresh Progress Bar */}
+      {isRefreshing && (
+        <div className="w-full h-1 bg-[var(--input-bg)] overflow-hidden rounded-full animate-fadeIn">
+          <div className="w-full h-full bg-gradient-to-r from-[var(--brand-teal)] via-purple-500 to-[var(--brand-teal)] animate-pulse" />
+        </div>
+      )}
 
       {/* Notification banner */}
       {notification && (
@@ -329,8 +336,10 @@ export function AdminPayrollTab() {
         </div>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Main Content Area with Smooth Refresh Transition */}
+      <div className={`space-y-6 transition-all duration-300 ${isRefreshing ? 'opacity-40 scale-[0.99] filter blur-[0.4px] pointer-events-none' : 'opacity-100 scale-100'}`}>
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Monthly Payroll */}
         <div className="bg-[var(--card)] p-4 rounded-xl border border-[var(--card-border)] shadow-xs">
           <div className="flex items-center justify-between">
@@ -493,6 +502,7 @@ export function AdminPayrollTab() {
           </table>
         </div>
       </div>
+    </div>
 
       {/* Salary Editor Modal (Prompt 10) */}
       {editingEmployee && (

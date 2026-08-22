@@ -2,23 +2,67 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { AttendanceKioskModal } from './AttendanceKioskModal';
 import {
-  Camera, CalendarDays, FileText, CheckCircle2, Bell, AlertTriangle, UserCheck, Clock, Plane
+  Camera, CalendarDays, FileText, CheckCircle2, Bell, AlertTriangle, UserCheck, Clock, Plane, X, ShieldAlert, Check, Ban
 } from 'lucide-react';
 
 interface MainDashboardTabProps {
   onNavigateToTab: (tab: 'employees' | 'attendance' | 'timeoff') => void;
 }
 
+interface FlaggedCheckin {
+  name: string;
+  time: string;
+  note: string;
+  coordinates: string;
+  empId: string;
+  department: string;
+}
+
+interface LeaveRequest {
+  id: string;
+  name: string;
+  empId: string;
+  department: string;
+  email: string;
+  type: string;
+  dates: string;
+  days: number;
+  reason: string;
+}
+
 export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'HR_ADMIN';
 
-  // State to simulate action handling locally
+  // Modal States
+  const [isKioskOpen, setIsKioskOpen] = useState(false);
+  const [isFlaggedViewAllOpen, setIsFlaggedViewAllOpen] = useState(false);
+  const [selectedLeave, setSelectedLeave] = useState<LeaveRequest | null>(null);
+  const [selectedFlagged, setSelectedFlagged] = useState<FlaggedCheckin | null>(null);
+
+  // Simulated Action State Lists
   const [approvedRequests, setApprovedRequests] = useState<string[]>([]);
+  const [rejectedRequests, setRejectedRequests] = useState<string[]>([]);
   const [reviewedCheckins, setReviewedCheckins] = useState<string[]>([]);
+  const [rejectedCheckins, setRejectedCheckins] = useState<string[]>([]);
 
   if (!user) return null;
+
+  // Mock datasets for Admin
+  const flaggedCheckins: FlaggedCheckin[] = [
+    { name: 'Rohan Mehta', time: '08:57 AM', note: '128m from permitted location', coordinates: '12.9729, 77.5958', empId: 'EMP-1043', department: 'Operations' },
+    { name: 'Fatima Ali', time: '09:06 AM', note: 'No location signal', coordinates: 'Unknown / Blocked', empId: 'EMP-1044', department: 'Finance' },
+    { name: 'Arjun Das', time: '09:18 AM', note: 'Camera image needs review', coordinates: '12.9716, 77.5946', empId: 'EMP-1045', department: 'Customer Success' },
+    { name: 'Dev Vashisht', time: '09:30 AM', note: 'Kiosk Geofence Bypass Warning', coordinates: '13.0827, 80.2707', empId: 'EMP-1088', department: 'Product Engineering' },
+  ];
+
+  const leaveRequests: LeaveRequest[] = [
+    { id: '1', name: 'Priya Nair', empId: 'EMP-1042', department: 'Product Engineering', email: 'priya.nair@mybuddy.com', type: 'Paid Leave', dates: 'Aug 26–27', days: 2, reason: 'Family wedding event celebration with relatives.' },
+    { id: '2', name: 'Dev Kumar', empId: 'EMP-1048', department: 'Product Engineering', email: 'dev.kumar@mybuddy.com', type: 'Sick Leave', dates: 'Aug 23', days: 1, reason: 'High fever and doctor-advised rest.' },
+    { id: '3', name: 'Nisha Roy', empId: 'EMP-1055', department: 'Marketing', email: 'nisha.roy@mybuddy.com', type: 'Unpaid Leave', dates: 'Aug 29–31', days: 3, reason: 'Personal family emergency travel.' },
+  ];
 
   if (isAdmin) {
     // HR Admin Dashboard View
@@ -35,12 +79,21 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
               Monitor workforce health, exceptions, and approvals.
             </p>
           </div>
-          <button
-            onClick={() => onNavigateToTab('employees')}
-            className="h-9 px-4 bg-[var(--brand-teal)] hover:bg-[var(--brand-teal-hover)] text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
-          >
-            Manage Employees
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setIsKioskOpen(true)}
+              className="h-9 px-4 border border-[var(--brand-teal)] text-[var(--brand-teal)] hover:bg-[var(--brand-teal)] hover:text-white text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              Smart Kiosk
+            </button>
+            <button
+              onClick={() => onNavigateToTab('employees')}
+              className="h-9 px-4 bg-[var(--brand-teal)] hover:bg-[var(--brand-teal-hover)] text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+            >
+              Manage Employees
+            </button>
+          </div>
         </div>
 
         {/* 4 Stats Grid */}
@@ -57,31 +110,44 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
           <section className="rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-5">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-bold text-sm text-[var(--foreground)]">Flagged location check-ins</h2>
-              <span className="text-[10px] uppercase font-bold text-[var(--text-muted)]">View all</span>
+              <button
+                type="button"
+                onClick={() => setIsFlaggedViewAllOpen(true)}
+                className="text-[10px] uppercase font-bold text-[var(--brand-teal)] hover:underline cursor-pointer"
+              >
+                View all
+              </button>
             </div>
             <div className="space-y-3.5">
-              {[
-                { name: 'Rohan Mehta', time: '08:57 AM', note: '128m from permitted location' },
-                { name: 'Fatima Ali', time: '09:06 AM', note: 'No location signal' },
-                { name: 'Arjun Das', time: '09:18 AM', note: 'Camera image needs review' },
-              ].map((item) => (
-                <div key={item.name} className="flex items-start gap-3 rounded-lg border border-[var(--card-border)] p-3 bg-[var(--background)]/30">
-                  <div className="grid h-8 w-8 place-items-center rounded-full bg-amber-500/10 font-bold text-xs text-amber-500 shrink-0">
-                    {item.name[0]}
+              {flaggedCheckins.slice(0, 3).map((item) => {
+                const isApproved = reviewedCheckins.includes(item.name);
+                const isRejected = rejectedCheckins.includes(item.name);
+                return (
+                  <div key={item.name} className="flex items-start gap-3 rounded-lg border border-[var(--card-border)] p-3 bg-[var(--background)]/30">
+                    <div className="grid h-8 w-8 place-items-center rounded-full bg-amber-500/10 font-bold text-xs text-amber-500 shrink-0">
+                      {item.name[0]}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-xs text-[var(--foreground)]">{item.name}</p>
+                      <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{item.time} · {item.note}</p>
+                    </div>
+                    {isApproved || isRejected ? (
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded ${
+                        isApproved ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
+                      }`}>
+                        {isApproved ? 'Approved ✓' : 'Rejected ✗'}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => setSelectedFlagged(item)}
+                        className="rounded-md border border-[var(--card-border)] px-2.5 py-1 text-[10px] font-bold hover:border-[var(--brand-teal)] text-[var(--foreground)] transition-colors cursor-pointer"
+                      >
+                        Review
+                      </button>
+                    )}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-bold text-xs text-[var(--foreground)]">{item.name}</p>
-                    <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{item.time} · {item.note}</p>
-                  </div>
-                  <button
-                    onClick={() => setReviewedCheckins((prev) => [...prev, item.name])}
-                    disabled={reviewedCheckins.includes(item.name)}
-                    className="rounded-md border border-[var(--card-border)] px-2.5 py-1 text-[10px] font-bold hover:border-[var(--brand-teal)] text-[var(--foreground)] disabled:opacity-40 disabled:cursor-default"
-                  >
-                    {reviewedCheckins.includes(item.name) ? 'Reviewed' : 'Review'}
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
 
@@ -89,33 +155,40 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
           <section className="rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-5">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-bold text-sm text-[var(--foreground)]">Leave approval queue</h2>
-              <span className="text-[10px] uppercase font-bold text-[var(--text-muted)]">12 pending</span>
+              <span className="text-[10px] uppercase font-bold text-[var(--text-muted)]">3 pending</span>
             </div>
             <div className="space-y-3.5">
-              {[
-                { id: '1', name: 'Priya Nair', note: 'Paid leave · Aug 26–27' },
-                { id: '2', name: 'Dev Kumar', note: 'Sick leave · Aug 23' },
-                { id: '3', name: 'Nisha Roy', note: 'Unpaid leave · Aug 29–31' },
-              ].map((item) => (
-                <div key={item.id} className="flex items-center justify-between gap-3 p-1">
-                  <div className="flex items-center gap-3">
-                    <div className="grid h-8 w-8 place-items-center rounded-full bg-blue-500/10 font-bold text-xs text-blue-500 shrink-0">
-                      {item.name[0]}
+              {leaveRequests.map((item) => {
+                const isApproved = approvedRequests.includes(item.id);
+                const isRejected = rejectedRequests.includes(item.id);
+                return (
+                  <div key={item.id} className="flex items-center justify-between gap-3 p-1">
+                    <div className="flex items-center gap-3">
+                      <div className="grid h-8 w-8 place-items-center rounded-full bg-blue-500/10 font-bold text-xs text-blue-500 shrink-0">
+                        {item.name[0]}
+                      </div>
+                      <div>
+                        <p className="font-bold text-xs text-[var(--foreground)]">{item.name}</p>
+                        <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{item.type} · {item.dates}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-bold text-xs text-[var(--foreground)]">{item.name}</p>
-                      <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{item.note}</p>
-                    </div>
+                    {isApproved || isRejected ? (
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded ${
+                        isApproved ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
+                      }`}>
+                        {isApproved ? 'Approved ✓' : 'Rejected ✗'}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => setSelectedLeave(item)}
+                        className="rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 text-[10px] font-bold text-emerald-500 transition-colors cursor-pointer"
+                      >
+                        Approve
+                      </button>
+                    )}
                   </div>
-                  <button
-                    onClick={() => setApprovedRequests((prev) => [...prev, item.id])}
-                    disabled={approvedRequests.includes(item.id)}
-                    className="rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 text-[10px] font-bold text-emerald-500 disabled:opacity-40 disabled:cursor-default"
-                  >
-                    {approvedRequests.includes(item.id) ? 'Approved ✓' : 'Approve'}
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         </div>
@@ -129,6 +202,159 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
             <StatCard title="Absent" value="3%" detail="8 employees" color="text-red-500" />
           </div>
         </section>
+
+        {/* MODAL 1: View All Flagged Checkins */}
+        {isFlaggedViewAllOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+            <div className="relative w-full max-w-lg bg-[var(--card)] border border-[var(--card-border)] rounded-2xl shadow-2xl overflow-hidden">
+              <button onClick={() => setIsFlaggedViewAllOpen(false)} className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--foreground)]"><X className="w-4 h-4" /></button>
+              <div className="p-5 border-b border-[var(--card-border)] flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-red-500" />
+                <div>
+                  <h3 className="text-sm font-bold text-[var(--foreground)]">Flagged Location Logs</h3>
+                  <p className="text-[10px] text-[var(--text-muted)]">Complete review queue for out-of-bounds check-ins</p>
+                </div>
+              </div>
+              <div className="p-5 max-h-[350px] overflow-y-auto space-y-3">
+                {flaggedCheckins.map((item) => {
+                  const isApproved = reviewedCheckins.includes(item.name);
+                  const isRejected = rejectedCheckins.includes(item.name);
+                  return (
+                    <div key={item.name} className="flex items-center justify-between p-3 rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]">
+                      <div>
+                        <p className="text-xs font-bold text-[var(--foreground)]">{item.name}</p>
+                        <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{item.time} · {item.note}</p>
+                        <p className="text-[9px] text-[var(--text-muted)] mt-1 font-mono">Coords: {item.coordinates}</p>
+                      </div>
+                      {isApproved || isRejected ? (
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded ${
+                          isApproved ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
+                        }`}>
+                          {isApproved ? 'Approved ✓' : 'Rejected ✗'}
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => setSelectedFlagged(item)}
+                          className="rounded-lg bg-[var(--brand-teal)] text-white hover:bg-[var(--brand-teal-hover)] px-3 py-1 text-[10px] font-bold transition-all cursor-pointer"
+                        >
+                          Review
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL 2: Review Flagged Checkin Details */}
+        {selectedFlagged && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+            <div className="relative w-full max-w-sm bg-[var(--card)] border border-[var(--card-border)] rounded-2xl shadow-2xl p-5">
+              <button onClick={() => setSelectedFlagged(null)} className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--foreground)]"><X className="w-4 h-4" /></button>
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-amber-500 flex items-center gap-1.5 mb-4">
+                <ShieldAlert className="w-4 h-4" /> Review Check-in Exception
+              </h3>
+              
+              <div className="space-y-3.5 text-xs">
+                <div>
+                  <p className="text-[9px] uppercase font-bold text-[var(--text-muted)]">Employee Details</p>
+                  <p className="font-bold text-[var(--foreground)] mt-0.5">{selectedFlagged.name} ({selectedFlagged.empId})</p>
+                  <p className="text-[10px] text-[var(--text-muted)]">{selectedFlagged.department}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] uppercase font-bold text-[var(--text-muted)]">Capture Telemetry</p>
+                  <p className="font-bold text-[var(--foreground)] mt-0.5">Time: {selectedFlagged.time}</p>
+                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Flag note: {selectedFlagged.note}</p>
+                  <p className="text-[10px] text-[var(--text-muted)] font-mono">Coordinates: {selectedFlagged.coordinates}</p>
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-5">
+                <button
+                  onClick={() => {
+                    setReviewedCheckins((prev) => [...prev, selectedFlagged.name]);
+                    setSelectedFlagged(null);
+                  }}
+                  className="flex-1 h-9 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs uppercase flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" /> Approve
+                </button>
+                <button
+                  onClick={() => {
+                    setRejectedCheckins((prev) => [...prev, selectedFlagged.name]);
+                    setSelectedFlagged(null);
+                  }}
+                  className="flex-1 h-9 rounded-lg bg-red-500 hover:bg-red-600 text-white font-bold text-xs uppercase flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Ban className="w-3.5 h-3.5" /> Reject
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL 3: Leave Approval Floating Window */}
+        {selectedLeave && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+            <div className="relative w-full max-w-sm bg-[var(--card)] border border-[var(--card-border)] rounded-2xl shadow-2xl p-5">
+              <button onClick={() => setSelectedLeave(null)} className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--foreground)]"><X className="w-4 h-4" /></button>
+              
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-[var(--brand-teal)] flex items-center gap-1.5 mb-4">
+                <Plane className="w-4 h-4" /> Leave Request Approval
+              </h3>
+
+              <div className="space-y-3.5 text-xs">
+                {/* Employee info */}
+                <div>
+                  <p className="text-[9px] uppercase font-bold text-[var(--text-muted)]">Employee Info</p>
+                  <p className="font-bold text-[var(--foreground)] mt-0.5">{selectedLeave.name}</p>
+                  <p className="text-[10px] text-[var(--text-muted)]">{selectedLeave.empId} · {selectedLeave.department}</p>
+                  <p className="text-[10px] text-[var(--text-muted)]">{selectedLeave.email}</p>
+                </div>
+                {/* Leave details */}
+                <div>
+                  <p className="text-[9px] uppercase font-bold text-[var(--text-muted)]">Leave Details</p>
+                  <p className="font-bold text-[var(--foreground)] mt-0.5">{selectedLeave.type} ({selectedLeave.days} Day{selectedLeave.days !== 1 ? 's' : ''})</p>
+                  <p className="text-[10px] text-[var(--text-muted)]">Period: {selectedLeave.dates}</p>
+                </div>
+                {/* Leave reason */}
+                <div>
+                  <p className="text-[9px] uppercase font-bold text-[var(--text-muted)]">Leave Reason</p>
+                  <p className="text-xs text-[var(--foreground)] bg-[var(--input-bg)] border border-[var(--card-border)] rounded-lg p-2.5 mt-1 leading-relaxed">
+                    {selectedLeave.reason}
+                  </p>
+                </div>
+              </div>
+
+              {/* Action triggers */}
+              <div className="flex gap-2 mt-5">
+                <button
+                  onClick={() => {
+                    setApprovedRequests((prev) => [...prev, selectedLeave.id]);
+                    setSelectedLeave(null);
+                  }}
+                  className="flex-1 h-9 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs uppercase flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" /> Approve
+                </button>
+                <button
+                  onClick={() => {
+                    setRejectedRequests((prev) => [...prev, selectedLeave.id]);
+                    setSelectedLeave(null);
+                  }}
+                  className="flex-1 h-9 rounded-lg bg-red-500 hover:bg-red-600 text-white font-bold text-xs uppercase flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Ban className="w-3.5 h-3.5" /> Reject
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Shared smart kiosk modal */}
+        <AttendanceKioskModal isOpen={isKioskOpen} onClose={() => setIsKioskOpen(false)} />
       </div>
     );
   }
@@ -149,6 +375,13 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
             Here is your workday summary at a glance.
           </p>
         </div>
+        <button
+          onClick={() => setIsKioskOpen(true)}
+          className="h-9 px-4 bg-[var(--brand-teal)] hover:bg-[var(--brand-teal-hover)] text-white text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm"
+        >
+          <Camera className="w-3.5 h-3.5" />
+          Smart Kiosk
+        </button>
       </div>
 
       {/* 4 Stats Grid */}
@@ -195,7 +428,7 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
                 icon={<Camera className="w-4 h-4 text-[var(--brand-teal)]" />}
                 title="Kiosk attendance"
                 text="Verify camera & GPS"
-                onClick={() => onNavigateToTab('attendance')}
+                onClick={() => setIsKioskOpen(true)}
               />
               <QuickAction
                 icon={<CalendarDays className="w-4 h-4 text-[var(--brand-teal)]" />}
@@ -235,6 +468,9 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
           ))}
         </div>
       </section>
+
+      {/* Shared smart kiosk modal */}
+      <AttendanceKioskModal isOpen={isKioskOpen} onClose={() => setIsKioskOpen(false)} />
     </div>
   );
 }

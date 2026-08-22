@@ -16,6 +16,16 @@ interface AttendanceRecord {
 const CHECKIN_KEY = (userId: string) => `my_buddy_hrms_checkin_${userId}`;
 const HISTORY_KEY = (userId: string) => `my_buddy_hrms_attendance_history_${userId}`;
 
+function formatTimeShort(ts: number): string {
+  const date = new Date(ts);
+  let hours = date.getHours();
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const ampm = hours >= 12 ? 'P' : 'A';
+  hours = hours % 12;
+  hours = hours ? hours : 12; // the hour '0' should be '12'
+  return `${hours}:${minutes}${ampm}`;
+}
+
 function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString('en-US', {
     hour: '2-digit',
@@ -62,17 +72,14 @@ export function AttendanceTab() {
       : history;
 
     if (all.length === 0) {
-      // Generate rich mock data for the calendar (last 45 days)
       const mockRecords: AttendanceRecord[] = [];
       const now = new Date();
       for (let i = 0; i < 45; i++) {
         const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-        // Skip Sundays
         if (d.getDay() === 0) continue;
 
         const dateStr = d.toISOString().slice(0, 10);
         
-        // Check if there is an approved leave for this date
         const hasLeave = INITIAL_LEAVES.some(
           (l) => l.userId === user.user_id &&
           l.status === 'APPROVED' &&
@@ -80,12 +87,11 @@ export function AttendanceTab() {
           dateStr <= l.endDate
         );
 
-        if (hasLeave) continue; // Leaves are handled dynamically
+        if (hasLeave) continue;
 
-        // 85% attendance, 15% absent rate
         const isPresent = Math.random() > 0.15;
         if (isPresent) {
-          const checkInHour = 9 + (Math.random() > 0.7 ? 1 : 0); // Late sometimes
+          const checkInHour = 9 + (Math.random() > 0.7 ? 1 : 0);
           const checkInMin = Math.floor(Math.random() * 30);
           const checkInTime = new Date(d.getFullYear(), d.getMonth(), d.getDate(), checkInHour, checkInMin, 0).getTime();
           const checkOutTime = checkInTime + (8 + Math.random()) * 3600000;
@@ -96,7 +102,6 @@ export function AttendanceTab() {
             checkOut: checkOutTime,
           });
         } else {
-          // Absent record
           mockRecords.push({
             date: dateStr,
             checkIn: null,
@@ -110,29 +115,24 @@ export function AttendanceTab() {
     }
   }, [user]);
 
-  // Calendar calculations
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
-
   const monthName = currentDate.toLocaleString('en-US', { month: 'long' });
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayIndex = new Date(year, month, 1).getDay(); // 0 = Sunday, 1 = Monday etc
+  const firstDayIndex = new Date(year, month, 1).getDay();
 
   const calendarDays = useMemo(() => {
     const days: (Date | null)[] = [];
-    // Padding for first week
     for (let i = 0; i < firstDayIndex; i++) {
       days.push(null);
     }
-    // Days of the month
     for (let d = 1; d <= daysInMonth; d++) {
       days.push(new Date(year, month, d));
     }
     return days;
   }, [year, month, daysInMonth, firstDayIndex]);
 
-  // Navigate months
   const prevMonth = () => {
     setCurrentDate(new Date(year, month - 1, 1));
     setSelectedDayRecord(null);
@@ -145,12 +145,10 @@ export function AttendanceTab() {
     setSelectedDateStr(null);
   };
 
-  // Helper to check state of a date
   const getDayState = (date: Date) => {
     const dateStr = date.toISOString().slice(0, 10);
     const todayStr = new Date().toISOString().slice(0, 10);
     
-    // 1. Leave Check
     const leave = INITIAL_LEAVES.find(
       (l) => l.userId === user?.user_id &&
       l.status === 'APPROVED' &&
@@ -159,7 +157,6 @@ export function AttendanceTab() {
     );
     if (leave) return { type: 'LEAVE', record: null, leave };
 
-    // 2. Attendance record check
     const rec = records.find((r) => r.date === dateStr);
     if (rec) {
       if (rec.checkIn && rec.checkOut) {
@@ -171,17 +168,14 @@ export function AttendanceTab() {
       }
     }
 
-    // 3. Future dates check
     if (dateStr > todayStr) {
       return { type: 'FUTURE', record: null };
     }
 
-    // 4. Sundays check
     if (date.getDay() === 0) {
       return { type: 'WEEKEND', record: null };
     }
 
-    // 5. Default is absent for past dates
     return { type: 'ABSENT', record: null };
   };
 
@@ -194,12 +188,6 @@ export function AttendanceTab() {
     
     if (state.type === 'PRESENT' || state.type === 'ACTIVE') {
       setSelectedDayRecord(state.record);
-    } else if (state.type === 'LEAVE') {
-      setSelectedDayRecord({
-        date: dateStr,
-        checkIn: null,
-        checkOut: null,
-      });
     } else {
       setSelectedDayRecord({
         date: dateStr,
@@ -211,7 +199,6 @@ export function AttendanceTab() {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Title */}
       <div>
         <h2 className="text-sm font-bold text-[var(--foreground)]">Attendance Calendar</h2>
         <p className="text-[11px] text-[var(--text-muted)] mt-0.5">Visual representation of your workday history</p>
@@ -253,51 +240,70 @@ export function AttendanceTab() {
           </div>
 
           {/* Days Grid */}
-          <div className="grid grid-cols-7 gap-1.5">
+          <div className="grid grid-cols-7 gap-2">
             {calendarDays.map((date, idx) => {
               if (!date) {
-                return <div key={`empty-${idx}`} className="aspect-square opacity-0" />;
+                return <div key={`empty-${idx}`} className="h-20 opacity-0" />;
               }
 
               const state = getDayState(date);
               const isSelected = selectedDateStr === date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
               
               let cellClass = '';
-              let badgeColor = '';
-              let badgeIcon = null;
+              let summaryElement = null;
 
-              if (state.type === 'PRESENT') {
-                cellClass = 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500/20';
-                badgeColor = 'bg-emerald-500';
-              } else if (state.type === 'ACTIVE') {
-                cellClass = 'bg-teal-500/10 border-teal-500/20 text-[var(--brand-teal)] hover:bg-teal-500/20';
-                badgeColor = 'bg-[var(--brand-teal)]';
+              if (state.type === 'PRESENT' && state.record) {
+                cellClass = 'bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20';
+                summaryElement = (
+                  <div className="text-[8px] font-mono leading-tight mt-1 flex flex-col items-center">
+                    <span className="text-emerald-500">In: {formatTimeShort(state.record.checkIn!)}</span>
+                    <span className="text-emerald-500">Out: {formatTimeShort(state.record.checkOut!)}</span>
+                  </div>
+                );
+              } else if (state.type === 'ACTIVE' && state.record) {
+                cellClass = 'bg-teal-500/10 border-teal-500/25 text-[var(--brand-teal)] hover:bg-teal-500/20 animate-pulse';
+                summaryElement = (
+                  <div className="text-[8px] font-mono leading-tight mt-1 flex flex-col items-center">
+                    <span className="text-[var(--brand-teal)]">In: {formatTimeShort(state.record.checkIn!)}</span>
+                    <span className="text-[var(--text-muted)] italic font-semibold">Active</span>
+                  </div>
+                );
               } else if (state.type === 'LEAVE') {
-                cellClass = 'bg-sky-500/10 border-sky-500/20 text-sky-500 hover:bg-sky-500/20';
-                badgeIcon = <Plane className="w-2.5 h-2.5 shrink-0" />;
+                cellClass = 'bg-sky-500/10 border-sky-500/25 text-sky-500 hover:bg-sky-500/20';
+                summaryElement = (
+                  <div className="text-[8px] font-semibold tracking-wider text-sky-500 mt-1.5 flex items-center justify-center gap-0.5 uppercase">
+                    <Plane className="w-2 h-2 shrink-0" />
+                    <span>Leave</span>
+                  </div>
+                );
               } else if (state.type === 'ABSENT') {
-                cellClass = 'bg-red-500/10 border-red-500/20 text-red-500 hover:bg-red-500/20';
-                badgeColor = 'bg-red-500';
+                cellClass = 'bg-red-500/10 border-red-500/25 text-red-500 hover:bg-red-500/20';
+                summaryElement = (
+                  <div className="text-[8px] font-bold text-red-500/80 mt-2 uppercase tracking-wide">
+                    Absent
+                  </div>
+                );
               } else if (state.type === 'WEEKEND') {
-                cellClass = 'bg-[var(--input-bg)] border-[var(--card-border)]/50 text-[var(--text-muted)]/50 opacity-60';
+                cellClass = 'bg-[var(--input-bg)] border-[var(--card-border)]/55 text-[var(--text-muted)]/50 opacity-60';
+                summaryElement = (
+                  <span className="text-[8px] tracking-wide text-[var(--text-muted)]/50 mt-2 font-bold uppercase">Off</span>
+                );
               } else {
                 // Future dates
-                cellClass = 'bg-transparent border-[var(--card-border)] text-[var(--text-muted)] opacity-40 hover:bg-[var(--input-bg)]';
+                cellClass = 'bg-transparent border-[var(--card-border)] text-[var(--text-muted)] opacity-35 hover:bg-[var(--input-bg)]';
               }
 
               return (
                 <button
                   key={date.toISOString()}
                   onClick={() => handleDayClick(date)}
-                  className={`aspect-square flex flex-col items-center justify-between p-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${cellClass} ${
-                    isSelected ? 'ring-2 ring-[var(--brand-teal)] ring-offset-2 ring-offset-[var(--background)]' : ''
+                  className={`h-20 flex flex-col items-center justify-between p-1.5 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${cellClass} ${
+                    isSelected ? 'ring-2 ring-[var(--brand-teal)] ring-offset-2 ring-offset-[var(--background)] z-10' : ''
                   }`}
                 >
-                  <span className="self-start text-[10px]">{date.getDate()}</span>
-                  <div className="flex items-center justify-center">
-                    {badgeIcon ? badgeIcon : badgeColor ? (
-                      <span className={`w-1.5 h-1.5 rounded-full ${badgeColor}`} />
-                    ) : null}
+                  <span className="self-start text-[10px] opacity-75">{date.getDate()}</span>
+                  <div className="flex-1 flex flex-col items-center justify-center w-full min-w-0">
+                    {summaryElement}
                   </div>
                 </button>
               );
@@ -312,7 +318,7 @@ export function AttendanceTab() {
             </div>
             <div className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-[var(--brand-teal)]" />
-              <span>Active (Checked In)</span>
+              <span>Active</span>
             </div>
             <div className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-red-500" />
@@ -320,7 +326,7 @@ export function AttendanceTab() {
             </div>
             <div className="flex items-center gap-1 text-sky-500">
               <Plane className="w-2.5 h-2.5" />
-              <span>Approved Leave</span>
+              <span>Leave</span>
             </div>
           </div>
         </div>
@@ -328,7 +334,7 @@ export function AttendanceTab() {
         {/* Selected Day Details Panel */}
         <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-4 shadow-sm">
           <h3 className="text-xs font-bold text-[var(--foreground)] border-b border-[var(--card-border)] pb-2 mb-3">
-            Day Summary
+            Day Details Summary
           </h3>
           {selectedDateStr ? (
             <div className="space-y-4">
@@ -355,7 +361,7 @@ export function AttendanceTab() {
                       <p className="text-[10px] uppercase font-bold text-[var(--text-muted)]">Check Out Time</p>
                       <p className="text-xs font-bold text-[var(--foreground)] mt-0.5">
                         {selectedDayRecord.checkOut ? formatTime(selectedDayRecord.checkOut) : (
-                          <span className="text-[var(--text-muted)] italic">In Progress</span>
+                          <span className="text-[var(--text-muted)] italic font-semibold">In Progress</span>
                         )}
                       </p>
                     </div>
@@ -375,7 +381,6 @@ export function AttendanceTab() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {/* Absent or Leave details */}
                   {INITIAL_LEAVES.some(
                     (l) => l.userId === user?.user_id &&
                     l.status === 'APPROVED' &&
@@ -389,7 +394,7 @@ export function AttendanceTab() {
                       <div>
                         <p className="text-[10px] uppercase font-bold text-[var(--text-muted)]">Status</p>
                         <p className="text-xs font-bold text-sky-500 mt-0.5">Approved Time Off</p>
-                        <p className="text-[10px] text-[var(--text-muted)] mt-1">
+                        <p className="text-[10px] text-[var(--text-muted)] mt-1 leading-relaxed">
                           Reason: {INITIAL_LEAVES.find(l => selectedDayRecord?.date !== undefined && selectedDayRecord.date >= l.startDate && selectedDayRecord.date <= l.endDate)?.reason}
                         </p>
                       </div>

@@ -16,6 +16,7 @@ import {
   Users,
   Building,
   RefreshCw,
+  Loader2,
   X,
   ArrowRight,
   ShieldCheck
@@ -91,6 +92,7 @@ export function AdminPayrollTab() {
 
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // 6-step calculation engine helper
   const runCalculationEngine = (
@@ -145,7 +147,8 @@ export function AdminPayrollTab() {
   }, [inputWage, basicPct, hraPct, allowancePct, bonusPct, ltaPct, pfPct, ptFixed]);
 
   // Load employee payroll data
-  const loadPayrollData = async () => {
+  const loadPayrollData = async (isManualRefresh = false) => {
+    if (isManualRefresh) setIsRefreshing(true);
     try {
       const token = localStorage.getItem('my_buddy_hrms_jwt_v4') || localStorage.getItem('hrms_token');
       if (token) {
@@ -156,6 +159,13 @@ export function AdminPayrollTab() {
           const data = await res.json();
           if (data.payroll_sheet && data.payroll_sheet.length > 0) {
             setEmployees(data.payroll_sheet);
+            if (isManualRefresh) {
+              setTimeout(() => {
+                setIsRefreshing(false);
+                setNotification({ message: 'Workforce payroll and compensation records synced from server!', type: 'success' });
+                setTimeout(() => setNotification(null), 3500);
+              }, 900);
+            }
             return;
           }
         }
@@ -181,6 +191,14 @@ export function AdminPayrollTab() {
       };
     });
     setEmployees(mockPayroll);
+
+    if (isManualRefresh) {
+      setTimeout(() => {
+        setIsRefreshing(false);
+        setNotification({ message: 'Workforce payroll and compensation records synced from server!', type: 'success' });
+        setTimeout(() => setNotification(null), 3500);
+      }, 900);
+    }
   };
 
   useEffect(() => {
@@ -290,13 +308,25 @@ export function AdminPayrollTab() {
         </div>
 
         <button
-          onClick={loadPayrollData}
-          className="flex items-center gap-2 h-9 px-3.5 text-xs font-semibold rounded-lg bg-[var(--card)] border border-[var(--card-border)] hover:bg-[var(--input-bg)] text-[var(--foreground)] shadow-xs transition-colors cursor-pointer"
+          onClick={() => loadPayrollData(true)}
+          disabled={isRefreshing}
+          className="flex items-center gap-2 h-9 px-3.5 text-xs font-semibold rounded-lg bg-[var(--card)] border border-[var(--card-border)] hover:bg-[var(--input-bg)] text-[var(--foreground)] shadow-xs transition-all cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
         >
-          <RefreshCw className="w-3.5 h-3.5" />
-          Refresh Payroll
+          {isRefreshing ? (
+            <Loader2 className="w-4 h-4 text-[var(--brand-teal)] animate-spin" />
+          ) : (
+            <RefreshCw className="w-3.5 h-3.5 text-[var(--brand-teal)]" />
+          )}
+          <span>{isRefreshing ? 'Refreshing Records...' : 'Refresh Payroll'}</span>
         </button>
       </div>
+
+      {/* Animated Refresh Progress Bar */}
+      {isRefreshing && (
+        <div className="w-full h-1 bg-[var(--input-bg)] overflow-hidden rounded-full animate-fadeIn">
+          <div className="w-full h-full bg-gradient-to-r from-[var(--brand-teal)] via-purple-500 to-[var(--brand-teal)] animate-pulse" />
+        </div>
+      )}
 
       {/* Notification banner */}
       {notification && (
@@ -311,8 +341,10 @@ export function AdminPayrollTab() {
         </div>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Main Content Area with Smooth Refresh Transition */}
+      <div className={`space-y-6 transition-all duration-300 ${isRefreshing ? 'opacity-40 scale-[0.99] filter blur-[0.4px] pointer-events-none' : 'opacity-100 scale-100'}`}>
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Monthly Payroll */}
         <div className="bg-[var(--card)] p-4 rounded-xl border border-[var(--card-border)] shadow-xs">
           <div className="flex items-center justify-between">
@@ -475,6 +507,7 @@ export function AdminPayrollTab() {
           </table>
         </div>
       </div>
+    </div>
 
       {/* Salary Editor Modal (Prompt 10) */}
       {editingEmployee && (

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 interface MainDashboardTabProps {
-  onNavigateToTab: (tab: 'employees' | 'attendance' | 'timeoff' | 'payroll') => void;
+  onNavigateToTab: (tab: any) => void;
 }
 
 interface FlaggedCheckin {

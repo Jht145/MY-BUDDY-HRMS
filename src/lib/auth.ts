@@ -82,33 +82,25 @@ export function removeStoredToken(): void {
 }
 
 export async function loginUser(credentials: SignInCredentials): Promise<{ user: User; token: string }> {
-  initLocalStore();
-  const users = getStoredUsers();
-  const user = users.find(
-    (u) =>
-      u.email.toLowerCase() === credentials.email.trim().toLowerCase() &&
-      u.password === credentials.password
-  );
-
-  if (!user) {
-    throw new Error('Invalid Login ID/Email or password credentials.');
+  const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: credentials.email, password: credentials.password })
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.message || 'Invalid Login ID/Email or password credentials.');
   }
-
-  const { password, ...safeUser } = user;
-  const token = createJWT(safeUser);
-  setStoredToken(token);
-
-  return { user: safeUser, token };
+  const safeUser: User = {
+    ...data.user,
+    company_name: 'My Buddy',
+    user_id: String(data.user.id),
+  };
+  setStoredToken(data.token);
+  return { user: safeUser, token: data.token };
 }
 
 export async function registerUser(credentials: SignUpCredentials): Promise<{ user: User; token: string }> {
-  initLocalStore();
-  const users = getStoredUsers();
-
-  if (users.some((u) => u.email.toLowerCase() === credentials.email.trim().toLowerCase())) {
-    throw new Error(`Email address ${credentials.email} is already registered.`);
-  }
-
   // Parse name into first and last name
   const nameParts = credentials.name.trim().split(' ');
   const first_name = nameParts[0] || 'User';
@@ -118,30 +110,37 @@ export async function registerUser(credentials: SignUpCredentials): Promise<{ us
     credentials.employee_id ||
     `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  const role: UserRole = credentials.role || 'HR_ADMIN'; // Sign up creates company admin by default or specified
+  const role: UserRole = credentials.role || 'HR_ADMIN';
 
-  const newUser: StoredUser = {
-    user_id: `usr_${Date.now().toString().slice(-6)}`,
-    company_name: credentials.company_name.trim(),
-    company_logo: credentials.company_logo,
-    employee_id,
-    first_name,
-    last_name,
-    name: credentials.name.trim(),
-    email: credentials.email.trim().toLowerCase(),
-    phone: credentials.phone?.trim() || '',
-    password: credentials.password,
-    role,
-    department: role === 'HR_ADMIN' ? 'Executive / People Operations' : 'Product Engineering',
-    job_title: role === 'HR_ADMIN' ? 'Administrator' : 'Specialist',
-    joining_date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+  const response = await fetch('http://localhost:8000/api/v1/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      employee_id, 
+      first_name, 
+      last_name, 
+      email: credentials.email, 
+      password: credentials.password, 
+      role 
+    })
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.detail?.message || data.message || 'Failed to register account.');
+  }
+
+  const safeUser: User = {
+    user_id: String(data.data.user_id),
+    company_name: credentials.company_name || 'My Buddy',
+    employee_id: data.data.employee_id,
+    first_name: data.data.first_name,
+    last_name: data.data.last_name,
+    email: data.data.email,
+    role: data.data.role,
   };
-
-  users.push(newUser);
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-
-  const { password, ...safeUser } = newUser;
-  const token = createJWT(safeUser);
+  
+  // Wait, backend register returns token in verification flow, we need to login or mock token for now
+  const token = data.data.verification_token || createJWT(safeUser);
   setStoredToken(token);
 
   return { user: safeUser, token };

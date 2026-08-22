@@ -8,9 +8,9 @@ import { EmployeesTab } from '@/components/dashboard/EmployeesTab';
 import { AttendanceTab } from '@/components/dashboard/AttendanceTab';
 import { TimeOffTab } from '@/components/dashboard/TimeOffTab';
 import { MainDashboardTab } from '@/components/dashboard/MainDashboardTab';
-import { EmployeePayslipTab } from '@/components/dashboard/EmployeePayslipTab';
-import { AdminPayrollTab } from '@/components/dashboard/AdminPayrollTab';
 import { CheckInPanel } from '@/components/dashboard/CheckInPanel';
+import { AdminPayrollTab } from '@/components/dashboard/AdminPayrollTab';
+import { EmployeePayslipTab } from '@/components/dashboard/EmployeePayslipTab';
 import { Settings } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -32,8 +32,6 @@ export default function DashboardPage() {
     );
   }
 
-  const isAdmin = user.role === 'HR_ADMIN';
-
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex flex-col">
       {/* Top Navigation */}
@@ -48,7 +46,8 @@ export default function DashboardPage() {
             {activeTab === 'employees' && <EmployeesTab />}
             {activeTab === 'attendance' && <AttendanceTab />}
             {activeTab === 'timeoff' && <TimeOffTab />}
-            {activeTab === 'payroll' && (isAdmin ? <AdminPayrollTab /> : <EmployeePayslipTab />)}
+            {activeTab === 'payroll' && <AdminPayrollTab />}
+            {activeTab === 'payslips' && <EmployeePayslipTab />}
           </div>
 
           {/* Settings link — bottom of content area */}
@@ -61,27 +60,8 @@ export default function DashboardPage() {
         </main>
 
         {/* Right panel: Check In/Out */}
-        <aside className="hidden md:flex w-60 shrink-0 border-l border-[var(--card-border)] flex-col p-5 gap-5 bg-[var(--card)]/50">
-          <div>
-            <p className="text-[11px] uppercase tracking-wide font-bold text-[var(--text-muted)] mb-4">Attendance</p>
-            <CheckInPanel />
-          </div>
-
-          {/* Employee info summary */}
-          <div className="border-t border-[var(--card-border)] pt-4 space-y-1">
-            <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] font-semibold">Signed in as</p>
-            <p className="text-xs font-bold text-[var(--foreground)] truncate">
-              {user.name || `${user.first_name} ${user.last_name}`.trim()}
-            </p>
-            <p className="text-[11px] text-[var(--text-muted)] truncate">{user.employee_id}</p>
-            <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-              user.role === 'HR_ADMIN'
-                ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
-                : 'bg-teal-500/10 text-teal-400 border-teal-500/20'
-            }`}>
-              {user.role === 'HR_ADMIN' ? 'HR Admin' : 'Employee'}
-            </span>
-          </div>
+        <aside className="w-72 shrink-0 border-l border-[var(--card-border)] bg-[var(--card)] p-4 hidden lg:block overflow-y-auto">
+          <CheckInPanel />
         </aside>
       </div>
     </div>

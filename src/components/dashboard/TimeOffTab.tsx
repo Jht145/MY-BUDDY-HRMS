@@ -30,16 +30,58 @@ export function TimeOffTab() {
   const [reason, setReason] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  const myLeaves = INITIAL_LEAVES.filter((l) => l.userId === user?.user_id);
+  const [myLeaves, setMyLeaves] = useState<any[]>([]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  React.useEffect(() => {
+    async function loadLeaves() {
+      if (!user) return;
+      try {
+        const token = localStorage.getItem('my_buddy_hrms_jwt_v4');
+        const res = await fetch('http://localhost:8000/api/v1/leaves/my-requests', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success) {
+          setMyLeaves(data.leave_requests.map((l: any) => ({
+            id: l.leave_id,
+            type: l.leave_type,
+            startDate: l.start_date,
+            endDate: l.end_date,
+            reason: l.leave_reason,
+            status: l.leave_status,
+            adminComment: l.admin_comment
+          })));
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    loadLeaves();
+  }, [user, submitted]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    setShowForm(false);
-    setReason('');
-    setStartDate('');
-    setEndDate('');
-    setTimeout(() => setSubmitted(false), 4000);
+    try {
+      const token = localStorage.getItem('my_buddy_hrms_jwt_v4');
+      const res = await fetch('http://localhost:8000/api/v1/leaves/apply', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ leave_type: type, start_date: startDate, end_date: endDate, leave_reason: reason })
+      });
+      if (res.ok) {
+        setSubmitted(true);
+        setShowForm(false);
+        setReason('');
+        setStartDate('');
+        setEndDate('');
+        setTimeout(() => setSubmitted(false), 4000);
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (

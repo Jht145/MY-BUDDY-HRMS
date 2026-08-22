@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Plus } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getStoredUsers } from '@/lib/auth';
@@ -15,8 +15,39 @@ export function EmployeesTab() {
 
   const isAdmin = user?.role === 'HR_ADMIN';
 
-  // HR Admin: all users; Employee: only themselves
-  const allUsers = getStoredUsers();
+  const allUsersMock = getStoredUsers();
+  const [allUsers, setAllUsers] = useState<StoredUser[]>(allUsersMock);
+
+  useEffect(() => {
+    async function fetchUsers() {
+      try {
+        const token = localStorage.getItem('my_buddy_hrms_jwt_v4');
+        const res = await fetch('http://localhost:8000/api/v1/payroll/admin/overview', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success && data.payroll_sheet) {
+          const mappedUsers = data.payroll_sheet.map((u: any) => ({
+            user_id: String(u.user_id),
+            employee_id: u.employee_id,
+            first_name: u.employee_name.split(' ')[0],
+            last_name: u.employee_name.split(' ').slice(1).join(' '),
+            name: u.employee_name,
+            email: u.email || '',
+            department: u.department,
+            job_title: u.job_title,
+            attendance_status: u.present_days > 0 ? 'PRESENT' : 'ABSENT',
+            role: 'EMPLOYEE'
+          }));
+          setAllUsers(mappedUsers);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    fetchUsers();
+  }, [user]);
+
   const displayUsers = isAdmin
     ? allUsers.filter((u) =>
         search
@@ -25,7 +56,7 @@ export function EmployeesTab() {
               .includes(search.toLowerCase())
           : true
       )
-    : allUsers.filter((u) => u.user_id === user?.user_id);
+    : allUsers.filter((u) => u.user_id === String(user?.user_id));
 
   return (
     <div className="flex flex-col gap-5 h-full">

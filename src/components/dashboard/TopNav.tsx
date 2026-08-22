@@ -1,12 +1,12 @@
 'use client';
 
 import React from 'react';
+import { useAuth } from '@/context/AuthContext';
 import { BrandLogo } from '@/components/common/BrandLogo';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { AvatarMenu } from './AvatarMenu';
-import { useAuth } from '@/context/AuthContext';
 
-export type Tab = 'dashboard' | 'employees' | 'attendance' | 'timeoff' | 'payroll';
+export type Tab = 'dashboard' | 'employees' | 'attendance' | 'timeoff' | 'payroll' | 'payslips';
 
 interface TopNavProps {
   activeTab: Tab;
@@ -22,7 +22,9 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
     { id: 'employees', label: 'Employees' },
     { id: 'attendance', label: 'Attendance' },
     { id: 'timeoff', label: 'Time Off' },
-    { id: 'payroll', label: isAdmin ? 'Payroll' : 'Payslips' },
+    ...(isAdmin
+      ? [{ id: 'payroll' as Tab, label: 'Payroll' }]
+      : [{ id: 'payslips' as Tab, label: 'Payslips' }]),
   ];
 
   return (
@@ -39,9 +41,9 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+              className={`px-3 sm:px-4 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
                 activeTab === tab.id
-                  ? 'bg-[var(--brand-teal)] text-white shadow-sm'
+                  ? 'bg-[var(--brand-teal)] text-white shadow-xs'
                   : 'text-[var(--text-muted)] hover:text-[var(--foreground)]'
               }`}
             >
@@ -50,8 +52,8 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
           ))}
         </nav>
 
-        {/* Right: Theme toggle + Avatar */}
-        <div className="flex items-center gap-3 shrink-0">
+        {/* Right: Actions */}
+        <div className="flex items-center gap-3">
           <ThemeToggle />
           <AvatarMenu />
         </div>

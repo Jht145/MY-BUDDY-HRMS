@@ -1,178 +1,207 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from typing import Optional
+import datetime
 import sqlite3
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from pydantic import BaseModel
+from typing import Optional
 
 from backend.db import get_db
-from backend.middleware import require_role
+from backend.middleware import get_current_user, require_role
 
-# Restrict all routes in this router strictly to HR_ADMIN role
 router = APIRouter(
     prefix="/api/admin",
-    tags=["HR Administration"],
+    tags=["Admin Control & Context Switcher (Prompt 4.2)"],
     dependencies=[Depends(require_role("HR_ADMIN"))]
 )
 
 @router.get("/overview")
-async def get_admin_overview(
-    admin_user: dict = Depends(require_role("HR_ADMIN")),
-    db: sqlite3.Connection = Depends(get_db)
-):
+async def get_admin_overview(db: sqlite3.Connection = Depends(get_db)):
     """
-    HR Admin Dashboard Summary Metrics.
-    Strictly protected: HR_ADMIN role required.
+    Prompt 4.2: Company-wide metrics & dashboard counts.
     """
     cursor = db.cursor()
 
     cursor.execute("SELECT COUNT(*) as count FROM users")
     total_users = cursor.fetchone()["count"]
 
-    cursor.execute("SELECT COUNT(*) as count FROM users WHERE is_verified = 1")
+    cursor.execute("SELECT COUNT(*) as count FROM users WHERE is_email_verified = 1")
     verified_users = cursor.fetchone()["count"]
 
-    cursor.execute("SELECT COUNT(*) as count FROM users WHERE is_verified = 0")
-    pending_users = cursor.fetchone()["count"]
+    cursor.execute("SELECT COUNT(*) as count FROM attendance WHERE approval_status IN ('PENDING_ADMIN_APPROVAL', 'REJECTED')")
+    flagged_att = cursor.fetchone()["count"]
 
-    cursor.execute("SELECT COUNT(*) as count FROM users WHERE locked_until IS NOT NULL")
-    locked_users = cursor.fetchone()["count"]
-
-    cursor.execute("SELECT COUNT(*) as count FROM users WHERE role = 'HR_ADMIN'")
-    admin_count = cursor.fetchone()["count"]
-
-    cursor.execute("SELECT COUNT(*) as count FROM users WHERE role = 'EMPLOYEE'")
-    employee_count = cursor.fetchone()["count"]
+    cursor.execute("SELECT COUNT(*) as count FROM leave_requests WHERE leave_status = 'PENDING'")
+    pending_leaves = cursor.fetchone()["count"]
 
     return {
         "success": True,
         "data": {
             "totalUsers": total_users,
             "verifiedUsers": verified_users,
-            "pendingUsers": pending_users,
-            "lockedUsers": locked_users,
-            "rolesBreakdown": {
-                "HR_ADMIN": admin_count,
-                "EMPLOYEE": employee_count
-            },
-            "adminUser": {
-                "employee_id": admin_user.get("employee_id"),
-                "email": admin_user.get("email"),
-                "role": admin_user.get("role")
-            }
+            "flaggedAttendance": flagged_att,
+            "pendingLeaves": pending_leaves
         }
     }
 
 @router.get("/employees")
-async def get_all_employees(
+async def get_employees_directory(
     search: Optional[str] = Query(default=None),
     role: Optional[str] = Query(default=None),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """
-    Employee Directory with live search & role filtering.
-    Admin can see ALL employees data.
+    Prompt 4.2: Interactive Employee Card Directory with search and filters.
     """
     cursor = db.cursor()
     query = """
-        SELECT id, employee_id, first_name, last_name, email, role, is_verified, verification_token, failed_login_attempts, locked_until, created_at, updated_at
-        FROM users
-        WHERE 1=1
+        SELECT id as user_id, id, employee_id, first_name, last_name, email, role, phone, address,
+               profile_picture_url, job_title, department, joining_date, documents_url,
+               salary_base, salary_allowances, salary_deductions, net_salary,
+               leave_balance_paid, leave_balance_sick, is_email_verified,
+               failed_login_attempts, locked_until, created_at
+        FROM users WHERE 1=1
     """
     params = []
 
     if search:
         query += " AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR employee_id LIKE ?)"
-        term = f"%{search.strip()}%"
-        params.extend([term, term, term, term])
+        s = f"%{search.strip()}%"
+        params.extend([s, s, s, s])
 
-    if role and role in ['HR_ADMIN', 'EMPLOYEE']:
+    if role:
         query += " AND role = ?"
         params.append(role)
 
-    query += " ORDER BY created_at DESC"
-
+    query += " ORDER BY id ASC"
     cursor.execute(query, params)
     rows = cursor.fetchall()
 
+    now = datetime.datetime.utcnow()
     employees = []
+
     for r in rows:
+        is_locked = False
+        if r["locked_until"]:
+            try:
+                locked_time = datetime.datetime.fromisoformat(r["locked_until"])
+                if locked_time > now:
+                    is_locked = True
+            except ValueError:
+                pass
+
         employees.append({
+            "user_id": r["user_id"],
             "id": r["id"],
             "employee_id": r["employee_id"],
             "first_name": r["first_name"],
             "last_name": r["last_name"],
+            "full_name": f"{r['first_name']} {r['last_name']}",
             "email": r["email"],
             "role": r["role"],
-            "is_verified": bool(r["is_verified"]),
-            "is_locked": bool(r["locked_until"]),
-            "failed_attempts": r["failed_login_attempts"],
-            "verification_token": r["verification_token"],
-            "created_at": r["created_at"],
-            "updated_at": r["updated_at"]
+            "phone": r["phone"] or "Not provided",
+            "address": r["address"] or "Not provided",
+            "profile_picture_url": r["profile_picture_url"],
+            "job_title": r["job_title"],
+            "department": r["department"],
+            "joining_date": r["joining_date"],
+            "documents_url": r["documents_url"],
+            "salary_base": float(r["salary_base"] or 0),
+            "salary_allowances": float(r["salary_allowances"] or 0),
+            "salary_deductions": float(r["salary_deductions"] or 0),
+            "net_salary": float(r["net_salary"] or 0),
+            "leave_balance_paid": r["leave_balance_paid"],
+            "leave_balance_sick": r["leave_balance_sick"],
+            "is_email_verified": bool(r["is_email_verified"]),
+            "is_verified": bool(r["is_email_verified"]),
+            "is_locked": is_locked
         })
 
-    return {
-        "success": True,
-        "count": len(employees),
-        "employees": employees
-    }
+    return {"success": True, "count": len(employees), "employees": employees}
 
-@router.patch("/employees/{user_id}/verify")
-async def toggle_employee_verification(
-    user_id: int,
+@router.get("/employees/{target_user_id}/context-view")
+async def get_employee_context_view(
+    target_user_id: int,
     db: sqlite3.Connection = Depends(get_db)
 ):
     """
-    Manually toggle employee verification status by HR Admin.
+    Prompt 4.2: Global Employee Context Switcher:
+    Allows HR Officers to inspect any individual employee's view
+    with read/edit capabilities (Profile, Attendance, Leaves, Payroll).
     """
     cursor = db.cursor()
-    cursor.execute("SELECT id, email, is_verified FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"success": False, "message": "Employee record not found."}
-        )
-
-    new_status = 0 if user["is_verified"] else 1
     cursor.execute("""
-        UPDATE users 
-        SET is_verified = ?, verification_token = NULL, updated_at = CURRENT_TIMESTAMP 
-        WHERE id = ?
-    """, (new_status, user_id))
-    db.commit()
+        SELECT id, employee_id, first_name, last_name, email, role, phone, address,
+               profile_picture_url, job_title, department, joining_date, documents_url,
+               salary_base, salary_allowances, salary_deductions, net_salary,
+               leave_balance_paid, leave_balance_sick, is_email_verified, created_at
+        FROM users WHERE id = ?
+    """, (target_user_id,))
+    u = cursor.fetchone()
+
+    if not u:
+        raise HTTPException(status_code=404, detail="Employee not found.")
+
+    # Recent attendance logs
+    cursor.execute("""
+        SELECT attendance_id, attendance_date, check_in_time, check_out_time,
+               is_within_geofence, attendance_status, approval_status, admin_comment
+        FROM attendance WHERE user_id = ? ORDER BY attendance_date DESC LIMIT 10
+    """, (target_user_id,))
+    att_rows = cursor.fetchall()
+
+    # Leave requests
+    cursor.execute("""
+        SELECT leave_id, leave_type, start_date, end_date, leave_reason, leave_status, admin_comment
+        FROM leave_requests WHERE user_id = ? ORDER BY created_at DESC
+    """, (target_user_id,))
+    leave_rows = cursor.fetchall()
+
+    # Payroll records
+    cursor.execute("""
+        SELECT payroll_id, salary_base, salary_allowances, salary_deductions, net_salary, updated_at
+        FROM payroll WHERE user_id = ? ORDER BY payroll_id DESC
+    """, (target_user_id,))
+    pay_rows = cursor.fetchall()
 
     return {
         "success": True,
-        "message": f"Employee ({user['email']}) verification set to {'VERIFIED' if new_status else 'UNVERIFIED'}.",
-        "is_verified": bool(new_status)
+        "context_user": {
+            "user_id": u["id"],
+            "employee_id": u["employee_id"],
+            "first_name": u["first_name"],
+            "last_name": u["last_name"],
+            "email": u["email"],
+            "role": u["role"],
+            "phone": u["phone"],
+            "address": u["address"],
+            "profile_picture_url": u["profile_picture_url"],
+            "job_title": u["job_title"],
+            "department": u["department"],
+            "joining_date": u["joining_date"],
+            "documents_url": u["documents_url"],
+            "salary_base": float(u["salary_base"] or 0),
+            "salary_allowances": float(u["salary_allowances"] or 0),
+            "salary_deductions": float(u["salary_deductions"] or 0),
+            "net_salary": float(u["net_salary"] or 0),
+            "leave_balance_paid": u["leave_balance_paid"],
+            "leave_balance_sick": u["leave_balance_sick"],
+            "is_email_verified": bool(u["is_email_verified"])
+        },
+        "attendance_logs": [dict(r) for r in att_rows],
+        "leave_requests": [dict(r) for r in leave_rows],
+        "payroll_records": [dict(r) for r in pay_rows]
     }
 
-@router.patch("/employees/{user_id}/unlock")
-async def unlock_employee_account(
-    user_id: int,
-    db: sqlite3.Connection = Depends(get_db)
-):
+@router.patch("/employees/{target_user_id}/unlock")
+async def unlock_employee(target_user_id: int, db: sqlite3.Connection = Depends(get_db)):
     """
-    HR Admin action: Unlock an employee account that was locked after 3 failed login attempts.
+    Unlocks an account that was locked after 3 failed login attempts.
     """
     cursor = db.cursor()
-    cursor.execute("SELECT id, email, locked_until FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"success": False, "message": "Employee record not found."}
-        )
-
     cursor.execute("""
         UPDATE users 
-        SET failed_login_attempts = 0, locked_until = NULL, updated_at = CURRENT_TIMESTAMP 
+        SET failed_login_attempts = 0, locked_until = NULL, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-    """, (user_id,))
+    """, (target_user_id,))
     db.commit()
 
-    return {
-        "success": True,
-        "message": f"Account for {user['email']} has been unlocked and failed login trials reset."
-    }
+    return {"success": True, "message": f"Employee #{target_user_id} account unlocked."}

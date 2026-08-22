@@ -1,6 +1,5 @@
 /**
- * My Buddy HRMS Client Application
- * Full-Stack Core HR Operations & Smart Kiosk Attendance
+ * Dayflow HRMS Client Application (8 Task Prompts & Exact Data Dictionary)
  */
 
 const API_BASE = '';
@@ -22,7 +21,9 @@ const state = {
   rateLimitRemaining: 6,
   kioskLat: OFFICE_LAT,
   kioskLon: OFFICE_LON,
-  kioskPhoto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300'
+  kioskPhoto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300',
+  calendarMode: 'month',
+  calendarMonth: new Date().toISOString().substring(0, 7) // YYYY-MM
 };
 
 // ==========================================
@@ -50,7 +51,7 @@ async function apiRequest(endpoint, method = 'GET', data = null, token = state.t
 
     const result = await res.json();
 
-    if (res.status === 401 && result.inactivity_logout) {
+    if (res.status === 401 && (result.inactivity_logout || result.detail?.inactivity_logout)) {
       handleInactivityLogout('Session expired: Logged out due to 2 minutes of server-detected inactivity.');
       return { status: res.status, ok: false, data: result };
     }
@@ -213,7 +214,7 @@ function updatePasswordStrengthUI(password) {
 }
 
 // ==========================================
-// VIEW & TAB ROUTER
+// VIEW & TAB ROUTER (Prompt 3 & 4)
 // ==========================================
 
 function setView(viewName) {
@@ -283,7 +284,7 @@ function switchAuthTab(tab) {
 }
 
 function switchAdminTab(tabName) {
-  const tabs = ['overview', 'flagged', 'directory', 'leaves', 'payroll'];
+  const tabs = ['overview', 'context_switcher', 'flagged', 'directory', 'leaves', 'payroll'];
   tabs.forEach(t => {
     const el = document.getElementById(`admin-tab-${t}`);
     if (el) el.style.display = t === tabName ? 'block' : 'none';
@@ -294,14 +295,15 @@ function switchAdminTab(tabName) {
     btn.classList.toggle('active', tabs[idx] === tabName);
   });
 
-  if (tabName === 'flagged') loadAdminFlaggedAttendance();
+  if (tabName === 'context_switcher') loadAdminContextUserOptions();
+  else if (tabName === 'flagged') loadAdminFlaggedAttendance();
   else if (tabName === 'directory') loadAdminEmployees();
   else if (tabName === 'leaves') loadAdminLeaveQueue();
   else if (tabName === 'payroll') loadAdminPayroll();
 }
 
 function switchEmpTab(tabName) {
-  const tabs = ['overview', 'kiosk', 'leaves', 'payslips', 'profile'];
+  const tabs = ['overview', 'kiosk', 'calendar', 'leaves', 'payslips', 'profile'];
   tabs.forEach(t => {
     const el = document.getElementById(`emp-tab-${t}`);
     if (el) el.style.display = t === tabName ? 'block' : 'none';
@@ -313,13 +315,14 @@ function switchEmpTab(tabName) {
   });
 
   if (tabName === 'kiosk') loadEmployeeAttendanceKiosk();
+  else if (tabName === 'calendar') loadEmployeeCalendar();
   else if (tabName === 'leaves') loadEmployeeLeaves();
   else if (tabName === 'payslips') loadEmployeePayslips();
   else if (tabName === 'profile') loadEmployeeProfile();
 }
 
 // ==========================================
-// AUTHENTICATION LOGIC
+// PROMPT 2 & 3: AUTHENTICATION ENGINE
 // ==========================================
 
 async function handleLogin(e) {
@@ -341,20 +344,21 @@ async function handleLogin(e) {
     if (state.user.role === 'HR_ADMIN') setView('admin');
     else setView('employee');
   } else {
+    const detail = res.data.detail || res.data;
     if (res.status === 429) {
-      showAlert(alertEl, `⚡ <strong>Rate Limit Exceeded:</strong> ${res.data.message}`, 'danger');
+      showAlert(alertEl, `⚡ <strong>Rate Limit Exceeded:</strong> ${detail.message}`, 'danger');
     } else if (res.status === 423) {
-      showAlert(alertEl, `🔒 <strong>Account Locked:</strong> ${res.data.message}`, 'danger');
-    } else if (res.status === 403 && res.data.is_verified === false) {
+      showAlert(alertEl, `🔒 <strong>Account Locked:</strong> ${detail.message}`, 'danger');
+    } else if (res.status === 403 && detail.is_email_verified === false) {
       showAlert(
         alertEl,
-        `⚠️ <strong>Email Unverified:</strong> ${res.data.message}<br/>` +
-        `<button class="btn btn-sm btn-outline" style="margin-top: 0.5rem;" onclick="openVerifyModal('${res.data.verification_token || ''}')">Verify Account Now</button>`,
+        `⚠️ <strong>Email Unverified:</strong> ${detail.message}<br/>` +
+        `<button class="btn btn-sm btn-outline" style="margin-top: 0.5rem;" onclick="openVerifyModal('${detail.verification_token || ''}')">One-Click Email Verification</button>`,
         'warning'
       );
     } else {
-      let msg = res.data.detail?.message || res.data.message || 'Login failed.';
-      if (res.data.trials_remaining !== undefined) msg = `⚠️ ${msg}`;
+      let msg = detail.message || 'Login failed.';
+      if (detail.trials_remaining !== undefined) msg = `⚠️ ${msg}`;
       showAlert(alertEl, msg, 'danger');
     }
   }
@@ -421,7 +425,7 @@ async function handleVerifyEmail() {
   hideAlert(alertEl);
   const token = document.getElementById('verify-token-input').value.trim();
 
-  const res = await apiRequest('/api/auth/verify-email', 'POST', { token });
+  const res = await apiRequest(`/verify-email?token=${encodeURIComponent(token)}`);
   if (res.ok) {
     showAlert(alertEl, `✅ ${res.data.message}`, 'success');
     setTimeout(() => {
@@ -435,7 +439,7 @@ async function handleVerifyEmail() {
 }
 
 // ==========================================
-// HR ADMIN PORTAL MODULES
+// PROMPT 4.2: ADMIN DASHBOARD & CONTEXT SWITCHER
 // ==========================================
 
 async function loadAdminDashboard() {
@@ -447,21 +451,67 @@ async function loadAdminDashboard() {
     const data = overviewRes.data.data;
     document.getElementById('stat-total-staff').textContent = data.totalUsers;
     document.getElementById('stat-verified-staff').textContent = data.verifiedUsers;
+    document.getElementById('stat-flagged-count').textContent = data.flaggedAttendance;
+    document.getElementById('stat-pending-leaves').textContent = data.pendingLeaves;
+    document.getElementById('flagged-badge').textContent = data.flaggedAttendance;
+    document.getElementById('leaves-badge').textContent = data.pendingLeaves;
+  }
+}
+
+async function loadAdminContextUserOptions() {
+  const select = document.getElementById('admin-context-user-select');
+  const res = await apiRequest('/api/admin/employees');
+
+  if (res.ok && res.data.employees) {
+    select.innerHTML = '<option value="">Select an employee to switch view context...</option>' +
+      res.data.employees.map(e => `<option value="${e.user_id}">${e.full_name} (${e.employee_id} • ${e.department})</option>`).join('');
+  }
+}
+
+async function handleContextUserChange() {
+  const select = document.getElementById('admin-context-user-select');
+  const userId = select.value;
+  const card = document.getElementById('context-user-details-card');
+  const emptyMsg = document.getElementById('context-empty-msg');
+
+  if (!userId) {
+    card.style.display = 'none';
+    emptyMsg.style.display = 'block';
+    return;
   }
 
-  // Load flagged count & leaves count
-  const flaggedRes = await apiRequest('/api/v1/attendance/admin/flagged');
-  if (flaggedRes.ok) {
-    const count = flaggedRes.data.count || 0;
-    document.getElementById('stat-flagged-count').textContent = count;
-    document.getElementById('flagged-badge').textContent = count;
-  }
+  const res = await apiRequest(`/api/admin/employees/${userId}/context-view`);
+  if (res.ok) {
+    const u = res.data.context_user;
+    document.getElementById('ctx-emp-name').textContent = `${u.first_name} ${u.last_name}`;
+    document.getElementById('ctx-emp-id').textContent = `${u.employee_id} • ${u.email}`;
+    document.getElementById('ctx-emp-dept').textContent = u.department || 'General';
+    document.getElementById('ctx-emp-role').textContent = u.job_title || u.role;
+    document.getElementById('ctx-emp-salary').textContent = `$${u.salary_base.toFixed(2)}`;
+    document.getElementById('ctx-emp-net').textContent = `Net: $${u.net_salary.toFixed(2)}`;
 
-  const leavesRes = await apiRequest('/api/v1/leaves/admin/queue');
-  if (leavesRes.ok) {
-    const count = leavesRes.data.count || 0;
-    document.getElementById('stat-pending-leaves').textContent = count;
-    document.getElementById('leaves-badge').textContent = count;
+    const docsLink = document.getElementById('ctx-emp-docs-link');
+    docsLink.href = u.documents_url || '#';
+
+    // Render context attendance table
+    const attBody = document.getElementById('ctx-attendance-table-body');
+    if (res.data.attendance_logs && res.data.attendance_logs.length > 0) {
+      attBody.innerHTML = res.data.attendance_logs.map(l => `
+        <tr>
+          <td>${l.attendance_date}</td>
+          <td>${l.check_in_time || '-'}</td>
+          <td>${l.check_out_time || '-'}</td>
+          <td><span class="badge ${l.is_within_geofence ? 'badge-success' : 'badge-warning'}">${l.is_within_geofence ? 'Inside' : 'Outside'}</span></td>
+          <td><span class="badge ${l.attendance_status === 'PRESENT' ? 'badge-success' : 'badge-info'}">${l.attendance_status}</span></td>
+          <td><span class="badge ${l.approval_status === 'APPROVED' || l.approval_status === 'AUTO_APPROVED' ? 'badge-success' : 'badge-danger'}">${l.approval_status}</span></td>
+        </tr>
+      `).join('');
+    } else {
+      attBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--slate-400); padding: 1.5rem;">No recent attendance logs for this member.</td></tr>`;
+    }
+
+    card.style.display = 'block';
+    emptyMsg.style.display = 'none';
   }
 }
 
@@ -472,32 +522,32 @@ async function loadAdminFlaggedAttendance() {
   if (res.ok && res.data.flagged_logs && res.data.flagged_logs.length > 0) {
     container.innerHTML = res.data.flagged_logs.map(log => `
       <div class="flagged-card">
-        <img src="${log.photo_url}" alt="Candidate Photo" class="flagged-photo">
+        <img src="${log.check_in_photo_url}" alt="Candidate Photo" class="flagged-photo">
         <div>
           <strong>${log.employee_name} (${log.employee_id})</strong><br/>
-          <small style="color: var(--slate-500);">${log.department} • ${log.check_in_timestamp}</small>
+          <small style="color: var(--slate-500);">${log.department} • ${log.attendance_date} ${log.check_in_time || ''}</small>
         </div>
         <div style="font-size: 0.84rem; color: var(--danger); font-weight: 600;">
-          📍 ${log.distance_meters > 1000 ? (log.distance_meters/1000).toFixed(1) + ' km' : log.distance_meters + ' m'} away from office
+          📍 GPS: ${log.check_in_latitude.toFixed(4)}, ${log.check_in_longitude.toFixed(4)}
         </div>
-        <p style="font-size: 0.8rem; color: var(--slate-600);">${log.notes || 'Outside 100m geofence'}</p>
+        <p style="font-size: 0.8rem; color: var(--slate-600);">${log.admin_comment || 'Outside 100m geofence'}</p>
         <a href="${log.maps_url}" target="_blank" class="btn btn-sm btn-outline">🗺️ View Location on Map</a>
         <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-          <button class="btn btn-sm btn-primary" style="flex: 1;" onclick="actionFlaggedAttendance(${log.id}, 'APPROVE')">✓ Approve</button>
-          <button class="btn btn-sm btn-danger-outline" style="flex: 1;" onclick="actionFlaggedAttendance(${log.id}, 'REJECT')">✕ Reject</button>
+          <button class="btn btn-sm btn-primary" style="flex: 1;" onclick="actionFlaggedAttendance(${log.attendance_id}, 'APPROVED')">✓ Approve</button>
+          <button class="btn btn-sm btn-danger-outline" style="flex: 1;" onclick="actionFlaggedAttendance(${log.attendance_id}, 'REJECTED')">✕ Reject</button>
         </div>
       </div>
     `).join('');
   } else {
-    container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--slate-400); padding: 3rem;">✅ No flagged attendance check-ins requiring review.</div>`;
+    container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--slate-400); padding: 3rem;">✅ No flagged attendance entries requiring review.</div>`;
   }
 }
 
-async function actionFlaggedAttendance(logId, action) {
-  const notes = prompt(`Enter optional review note for ${action}:`, action === 'APPROVE' ? 'Approved by HR Admin' : 'Location rejected');
-  if (notes === null) return;
+async function actionFlaggedAttendance(attId, approval_status) {
+  const comment = prompt(`Enter optional review note for ${approval_status}:`, approval_status === 'APPROVED' ? 'Approved by HR Director' : 'Location rejected');
+  if (comment === null) return;
 
-  const res = await apiRequest(`/api/v1/attendance/admin/verify/${logId}`, 'PATCH', { action, notes });
+  const res = await apiRequest(`/api/v1/attendance/admin/verify/${attId}`, 'PATCH', { approval_status, admin_comment: comment });
   if (res.ok) {
     loadAdminFlaggedAttendance();
     loadAdminDashboard();
@@ -518,35 +568,32 @@ async function loadAdminEmployees() {
   if (res.ok && res.data.employees) {
     tbody.innerHTML = res.data.employees.map(emp => `
       <tr>
+        <td><img src="${emp.profile_picture_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;"></td>
         <td><strong>${emp.employee_id}</strong></td>
         <td>${emp.first_name} ${emp.last_name}</td>
         <td>${emp.email}</td>
         <td>${emp.department || 'General'}</td>
         <td><span class="badge ${emp.role === 'HR_ADMIN' ? 'badge-purple' : 'badge-info'}">${emp.role}</span></td>
-        <td>$${(emp.base_salary || 5000).toFixed(2)}</td>
-        <td>
-          <span class="badge ${emp.is_locked ? 'badge-danger' : (emp.is_verified ? 'badge-success' : 'badge-warning')}">
-            ${emp.is_locked ? 'Locked' : (emp.is_verified ? 'Verified' : 'Pending')}
-          </span>
-        </td>
+        <td>$${(emp.salary_base || 5000).toFixed(2)}</td>
+        <td><a href="${emp.documents_url}" target="_blank" style="font-size: 0.8rem; color: var(--primary);">📄 KYC Doc</a></td>
         <td style="display: flex; gap: 0.3rem;">
-          <button class="btn btn-sm btn-outline" onclick="promptEditEmployee(${emp.id}, '${emp.department || ''}', ${emp.base_salary || 5000})">Edit</button>
-          ${emp.is_locked ? `<button class="btn btn-sm btn-danger-outline" onclick="unlockEmployeeAccount(${emp.id})">Unlock</button>` : ''}
+          <button class="btn btn-sm btn-outline" onclick="promptEditEmployee(${emp.user_id}, '${emp.department || ''}', ${emp.salary_base || 5000})">Edit</button>
+          ${emp.is_locked ? `<button class="btn btn-sm btn-danger-outline" onclick="unlockEmployeeAccount(${emp.user_id})">Unlock</button>` : ''}
         </td>
       </tr>
     `).join('');
   }
 }
 
-async function promptEditEmployee(empId, currentDept, currentSalary) {
+async function promptEditEmployee(userId, currentDept, currentSalary) {
   const newDept = prompt('Enter Department:', currentDept);
   if (newDept === null) return;
-  const newSalary = prompt('Enter Base Monthly Salary ($):', currentSalary);
+  const newSalary = prompt('Enter salary_base ($):', currentSalary);
   if (newSalary === null) return;
 
-  const res = await apiRequest(`/api/v1/profile/admin/${empId}`, 'PATCH', {
+  const res = await apiRequest(`/api/v1/profile/admin/${userId}`, 'PATCH', {
     department: newDept,
-    base_salary: parseFloat(newSalary)
+    salary_base: parseFloat(newSalary)
   });
   if (res.ok) {
     loadAdminEmployees();
@@ -568,27 +615,26 @@ async function loadAdminLeaveQueue() {
     tbody.innerHTML = res.data.pending_queue.map(l => `
       <tr>
         <td><strong>${l.employee_name}</strong><br/><small>${l.department}</small></td>
-        <td><span class="badge badge-info">${l.type}</span></td>
+        <td><span class="badge badge-info">${l.leave_type}</span></td>
         <td>${l.start_date} to ${l.end_date}</td>
-        <td><strong>${l.days_count}</strong> days</td>
-        <td>${l.reason}</td>
+        <td>${l.leave_reason}</td>
         <td>Paid: ${l.paid_balance}d | Sick: ${l.sick_balance}d</td>
         <td style="display: flex; gap: 0.35rem;">
-          <button class="btn btn-sm btn-primary" onclick="actionLeave(${l.id}, 'APPROVE')">✓ Approve</button>
-          <button class="btn btn-sm btn-danger-outline" onclick="actionLeave(${l.id}, 'REJECT')">✕ Reject</button>
+          <button class="btn btn-sm btn-primary" onclick="actionLeave(${l.leave_id}, 'APPROVED')">✓ Approve</button>
+          <button class="btn btn-sm btn-danger-outline" onclick="actionLeave(${l.leave_id}, 'REJECTED')">✕ Reject</button>
         </td>
       </tr>
     `).join('');
   } else {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--slate-400); padding: 2rem;">No pending leave requests.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--slate-400); padding: 2rem;">No pending leave requests.</td></tr>`;
   }
 }
 
-async function actionLeave(leaveId, action) {
-  const comments = prompt(`Enter comments for ${action}:`, action === 'APPROVE' ? 'Approved by HR' : 'Denied');
-  if (comments === null) return;
+async function actionLeave(leaveId, leave_status) {
+  const comment = prompt(`Enter optional admin_comment for ${leave_status}:`, leave_status === 'APPROVED' ? 'Approved by HR Director' : 'Denied');
+  if (comment === null) return;
 
-  const res = await apiRequest(`/api/v1/leaves/admin/action/${leaveId}`, 'PATCH', { action, admin_comments: comments });
+  const res = await apiRequest(`/api/v1/leaves/admin/action/${leaveId}`, 'PATCH', { leave_status, admin_comment: comment });
   if (res.ok) {
     loadAdminLeaveQueue();
     loadAdminDashboard();
@@ -606,12 +652,12 @@ async function loadAdminPayroll() {
       <tr>
         <td><strong>${p.employee_name}</strong> (${p.employee_id})</td>
         <td>${p.department}</td>
-        <td>$${p.base_salary.toFixed(2)}</td>
-        <td>+$${p.allowances.toFixed(2)}</td>
-        <td>-$${p.deductions.toFixed(2)}</td>
-        <td><strong style="color: var(--primary);">$${p.net_pay.toFixed(2)}</strong></td>
+        <td>$${p.salary_base.toFixed(2)}</td>
+        <td>+$${p.salary_allowances.toFixed(2)}</td>
+        <td>-$${p.salary_deductions.toFixed(2)}</td>
+        <td><strong style="color: var(--primary);">$${p.net_salary.toFixed(2)}</strong></td>
         <td>
-          <button class="btn btn-sm btn-outline" onclick="promptAdjustPayroll(${p.user_id}, ${p.base_salary}, ${p.allowances}, ${p.deductions})">Adjust</button>
+          <button class="btn btn-sm btn-outline" onclick="promptAdjustPayroll(${p.user_id}, ${p.salary_base}, ${p.salary_allowances}, ${p.salary_deductions})">Adjust</button>
         </td>
       </tr>
     `).join('');
@@ -619,34 +665,23 @@ async function loadAdminPayroll() {
 }
 
 async function promptAdjustPayroll(userId, base, allow, ded) {
-  const newBase = prompt('Base Salary:', base);
+  const newBase = prompt('salary_base ($):', base);
   if (newBase === null) return;
-  const newAllow = prompt('Allowances:', allow);
+  const newAllow = prompt('salary_allowances ($):', allow);
   if (newAllow === null) return;
-  const newDed = prompt('Deductions:', ded);
+  const newDed = prompt('salary_deductions ($):', ded);
   if (newDed === null) return;
 
   const res = await apiRequest(`/api/v1/payroll/admin/adjust/${userId}`, 'PUT', {
-    base_salary: parseFloat(newBase),
-    allowances: parseFloat(newAllow),
-    deductions: parseFloat(newDed)
+    salary_base: parseFloat(newBase),
+    salary_allowances: parseFloat(newAllow),
+    salary_deductions: parseFloat(newDed)
   });
   if (res.ok) loadAdminPayroll();
 }
 
-async function finalizePayrollCycle() {
-  const period = prompt('Confirm pay period cycle (e.g. 2026-08):', '2026-08');
-  if (!period) return;
-
-  const res = await apiRequest('/api/v1/payroll/admin/finalize', 'POST', { pay_period: period });
-  if (res.ok) {
-    alert(`🎉 ${res.data.message}`);
-    loadAdminPayroll();
-  }
-}
-
 // ==========================================
-// EMPLOYEE PORTAL MODULES
+// PROMPT 4.1: EMPLOYEE DASHBOARD & METRICS
 // ==========================================
 
 async function loadEmployeeDashboard() {
@@ -655,25 +690,41 @@ async function loadEmployeeDashboard() {
   document.getElementById('emp-id-display').textContent = state.user.employee_id || 'N/A';
   document.getElementById('emp-email-display').textContent = state.user.email || 'N/A';
 
-  const profRes = await apiRequest('/api/v1/profile');
-  if (profRes.ok) {
-    const p = profRes.data.profile;
+  const res = await apiRequest('/api/employee/dashboard');
+  if (res.ok) {
+    const p = res.data.data.profile;
     document.getElementById('emp-leave-paid-count').textContent = p.leave_balance_paid;
     document.getElementById('emp-leave-sick-count').textContent = p.leave_balance_sick;
-    document.getElementById('emp-salary-display').textContent = `$${p.base_salary.toFixed(2)}`;
+    document.getElementById('emp-salary-display').textContent = `$${p.salary_base.toFixed(2)} / $${p.net_salary.toFixed(2)}`;
     document.getElementById('emp-dept-display').textContent = `${p.job_title} • ${p.department}`;
-  }
 
-  // Load today's attendance status
-  const attRes = await apiRequest('/api/v1/attendance/my-logs');
-  if (attRes.ok && attRes.data.logs && attRes.data.logs.length > 0) {
-    const latest = attRes.data.logs[0];
-    document.getElementById('emp-attendance-status').textContent = latest.status;
-    document.getElementById('emp-checkin-time').textContent = latest.check_in_timestamp.split('T')[1]?.substring(0, 5) || 'Checked-in';
+    // Recent announcements (Prompt 4.1)
+    const annList = document.getElementById('emp-announcements-list');
+    if (res.data.data.announcements && res.data.data.announcements.length > 0) {
+      annList.innerHTML = res.data.data.announcements.map(a => `
+        <div class="announcement-card">
+          <div class="announcement-title">${a.title}</div>
+          <div class="announcement-msg">${a.message}</div>
+          <div class="announcement-time">Posted on ${a.posted_at}</div>
+        </div>
+      `).join('');
+    } else {
+      annList.innerHTML = `<div style="color: var(--slate-400);">No new announcements.</div>`;
+    }
+
+    // Latest attendance
+    if (res.data.data.recent_attendance && res.data.data.recent_attendance.length > 0) {
+      const latest = res.data.data.recent_attendance[0];
+      document.getElementById('emp-attendance-status').textContent = latest.attendance_status;
+      document.getElementById('emp-checkin-time').textContent = latest.check_in_time || 'Checked-In';
+    }
   }
 }
 
-// Smart Kiosk Location & Camera Functions
+// ==========================================
+// PROMPT 6: SMART KIOSK & INTERACTIVE CALENDAR
+// ==========================================
+
 function setKioskLocationPreset(preset) {
   if (preset === 'office') {
     state.kioskLat = OFFICE_LAT;
@@ -717,10 +768,10 @@ function updateKioskLocationUI() {
 
   const tag = document.getElementById('kiosk-geo-tag');
   if (dist <= 100) {
-    tag.textContent = 'Within 100m Geofence';
+    tag.textContent = 'Within 100m Geofence (Auto-Approved)';
     tag.style.color = 'var(--success)';
   } else {
-    tag.textContent = 'Outside Geofence (Will Flag)';
+    tag.textContent = 'Outside Geofence (Will Flag for Admin Review)';
     tag.style.color = 'var(--danger)';
   }
 }
@@ -730,9 +781,9 @@ async function executeKioskCheckIn() {
   hideAlert(alertEl);
 
   const payload = {
-    photo_url: state.kioskPhoto,
-    latitude: state.kioskLat,
-    longitude: state.kioskLon
+    check_in_photo_url: state.kioskPhoto,
+    check_in_latitude: state.kioskLat,
+    check_in_longitude: state.kioskLon
   };
 
   const res = await apiRequest('/api/v1/attendance/kiosk/check-in', 'POST', payload);
@@ -756,9 +807,9 @@ async function executeKioskCheckOut() {
   const alertEl = document.getElementById('kiosk-alert');
   hideAlert(alertEl);
 
-  const res = await apiRequest('/api/v1/attendance/kiosk/check-out', 'POST', { photo_url: state.kioskPhoto });
+  const res = await apiRequest('/api/v1/attendance/kiosk/check-out', 'POST', { check_out_photo_url: state.kioskPhoto });
   if (res.ok) {
-    showAlert(alertEl, '🚪 Check-out recorded successfully.', 'success');
+    showAlert(alertEl, '🚪 Check-out timestamp recorded successfully.', 'success');
     loadEmployeeAttendanceKiosk();
   } else {
     showAlert(alertEl, res.data.detail?.message || 'Check-out failed.');
@@ -773,31 +824,152 @@ async function loadEmployeeAttendanceKiosk() {
   if (res.ok && res.data.logs) {
     tbody.innerHTML = res.data.logs.map(l => `
       <tr>
-        <td>${l.check_in_timestamp}</td>
-        <td><img src="${l.check_in_photo_url}" style="width: 38px; height: 38px; border-radius: 4px; object-fit: cover;"></td>
-        <td>${l.distance_meters > 1000 ? (l.distance_meters/1000).toFixed(1) + ' km' : l.distance_meters.toFixed(0) + ' m'}</td>
-        <td>
-          <span class="badge ${l.status === 'PRESENT' ? 'badge-success' : (l.status === 'REJECTED' ? 'badge-danger' : 'badge-warning')}">
-            ${l.status}
-          </span>
-        </td>
+        <td>${l.attendance_date}</td>
+        <td>${l.check_in_time || '-'}</td>
+        <td>${l.check_out_time || '-'}</td>
+        <td><span class="badge ${l.is_within_geofence ? 'badge-success' : 'badge-warning'}">${l.is_within_geofence ? 'Inside' : 'Outside'}</span></td>
+        <td><span class="badge ${l.attendance_status === 'PRESENT' ? 'badge-success' : 'badge-info'}">${l.attendance_status}</span></td>
+        <td><span class="badge ${l.approval_status === 'APPROVED' || l.approval_status === 'AUTO_APPROVED' ? 'badge-success' : 'badge-danger'}">${l.approval_status}</span></td>
       </tr>
     `).join('');
   }
 }
 
-// Leaves
+// PROMPT 6.3: MONTHLY INTERACTIVE CALENDAR LOGIC
+function setCalendarViewMode(mode) {
+  state.calendarMode = mode;
+  const btns = document.querySelectorAll('.calendar-controls .btn-group .btn');
+  btns.forEach(b => b.classList.toggle('active', b.textContent.toLowerCase().includes(mode)));
+
+  const grid = document.getElementById('calendar-month-grid');
+  const list = document.getElementById('calendar-list-view');
+
+  if (mode === 'month') {
+    grid.style.display = 'grid';
+    list.style.display = 'none';
+    loadEmployeeCalendar();
+  } else {
+    grid.style.display = 'none';
+    list.style.display = 'block';
+    renderCalendarListView(mode);
+  }
+}
+
+async function loadEmployeeCalendar() {
+  const picker = document.getElementById('calendar-month-picker');
+  if (picker && picker.value) state.calendarMonth = picker.value;
+  else if (picker) picker.value = state.calendarMonth;
+
+  const res = await apiRequest(`/api/v1/attendance/calendar?month=${state.calendarMonth}`);
+  if (!res.ok) return;
+
+  const attMap = res.data.attendance_by_date || {};
+  const leaveMap = res.data.approved_leaves_by_date || {};
+
+  const [yearStr, monthStr] = state.calendarMonth.split('-');
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10); // 1-12
+
+  const firstDayIndex = new Date(year, month - 1, 1).getDay(); // 0=Sun, 1=Mon...
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  const grid = document.getElementById('calendar-month-grid');
+  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  let html = daysOfWeek.map(d => `<div class="calendar-day-header">${d}</div>`).join('');
+
+  // Empty cells before 1st of month
+  for (let i = 0; i < firstDayIndex; i++) {
+    html += `<div class="calendar-day-cell empty"></div>`;
+  }
+
+  const todayStr = new Date().toISOString().substring(0, 10);
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dayPadded = day < 10 ? `0${day}` : `${day}`;
+    const dateStr = `${state.calendarMonth}-${dayPadded}`;
+    const isToday = dateStr === todayStr;
+
+    let pillHtml = '';
+    if (attMap[dateStr]) {
+      const att = attMap[dateStr];
+      const statusClass = att.attendance_status.toLowerCase();
+      pillHtml = `<div class="cal-status-pill status-${statusClass}">${att.attendance_status}</div>`;
+    } else if (leaveMap[dateStr]) {
+      pillHtml = `<div class="cal-status-pill status-leave">LEAVE (${leaveMap[dateStr].leave_type})</div>`;
+    }
+
+    html += `
+      <div class="calendar-day-cell ${isToday ? 'today' : ''}">
+        <div class="cal-date-num">${day}</div>
+        ${pillHtml}
+      </div>
+    `;
+  }
+
+  grid.innerHTML = html;
+}
+
+async function renderCalendarListView(mode) {
+  const tbody = document.getElementById('calendar-list-body');
+  const res = await apiRequest(`/api/v1/attendance/calendar?month=${state.calendarMonth}`);
+  if (!res.ok) return;
+
+  const attMap = res.data.attendance_by_date || {};
+  const leaveMap = res.data.approved_leaves_by_date || {};
+
+  const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const [yearStr, monthStr] = state.calendarMonth.split('-');
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  let rows = [];
+  const limit = mode === 'week' ? 7 : daysInMonth;
+
+  for (let day = 1; day <= limit; day++) {
+    const dayPadded = day < 10 ? `0${day}` : `${day}`;
+    const dateStr = `${state.calendarMonth}-${dayPadded}`;
+    const dayName = daysOfWeek[new Date(year, month - 1, day).getDay()];
+
+    const att = attMap[dateStr];
+    const leave = leaveMap[dateStr];
+
+    const status = att ? att.attendance_status : (leave ? `LEAVE (${leave.leave_type})` : 'ABSENT');
+    const approval = att ? att.approval_status : (leave ? 'APPROVED' : '-');
+    const checkin = att?.check_in_time || '-';
+    const checkout = att?.check_out_time || '-';
+
+    rows.push(`
+      <tr>
+        <td><strong>${dateStr}</strong></td>
+        <td>${dayName}</td>
+        <td>${checkin}</td>
+        <td>${checkout}</td>
+        <td><span class="badge ${status === 'PRESENT' ? 'badge-success' : (status.includes('LEAVE') ? 'badge-purple' : 'badge-danger')}">${status}</span></td>
+        <td><span class="badge badge-info">${approval}</span></td>
+      </tr>
+    `);
+  }
+
+  tbody.innerHTML = rows.join('');
+}
+
+// ==========================================
+// PROMPT 7: LEAVE MANAGEMENT
+// ==========================================
+
 async function submitLeaveApplication(e) {
   e.preventDefault();
   const alertEl = document.getElementById('emp-leave-alert');
   hideAlert(alertEl);
 
-  const type = document.getElementById('leave-type-input').value;
+  const leave_type = document.getElementById('leave-type-input').value;
   const start_date = document.getElementById('leave-start-input').value;
   const end_date = document.getElementById('leave-end-input').value;
-  const reason = document.getElementById('leave-reason-input').value;
+  const leave_reason = document.getElementById('leave-reason-input').value;
 
-  const res = await apiRequest('/api/v1/leaves/apply', 'POST', { type, start_date, end_date, reason });
+  const res = await apiRequest('/api/v1/leaves/apply', 'POST', { leave_type, start_date, end_date, leave_reason });
   if (res.ok) {
     showAlert(alertEl, `🎉 ${res.data.message}`, 'success');
     document.getElementById('emp-leave-form').reset();
@@ -814,39 +986,42 @@ async function loadEmployeeLeaves() {
   if (res.ok && res.data.leave_requests) {
     tbody.innerHTML = res.data.leave_requests.map(l => `
       <tr>
-        <td><span class="badge badge-info">${l.type}</span></td>
+        <td><span class="badge badge-info">${l.leave_type}</span></td>
         <td>${l.start_date} to ${l.end_date}</td>
-        <td>${l.days_count} days</td>
-        <td>${l.reason}</td>
+        <td>${l.leave_reason}</td>
         <td>
-          <span class="badge ${l.status === 'APPROVED' ? 'badge-success' : (l.status === 'REJECTED' ? 'badge-danger' : 'badge-warning')}">
-            ${l.status}
+          <span class="badge ${l.leave_status === 'APPROVED' ? 'badge-success' : (l.leave_status === 'REJECTED' ? 'badge-danger' : 'badge-warning')}">
+            ${l.leave_status}
           </span>
         </td>
+        <td>${l.admin_comment || '-'}</td>
       </tr>
     `).join('');
   }
 }
 
-// Payslips
+// ==========================================
+// PROMPT 8: PAYROLL & COMPLIANCE
+// ==========================================
+
 async function loadEmployeePayslips() {
   const container = document.getElementById('payslips-cards-container');
   const res = await apiRequest('/api/v1/payroll/my-payslips');
 
-  if (res.ok && res.data.payslips && res.data.payslips.length > 0) {
-    container.innerHTML = res.data.payslips.map(p => `
+  if (res.ok && res.data.payroll_records && res.data.payroll_records.length > 0) {
+    container.innerHTML = res.data.payroll_records.map(p => `
       <div class="payslip-card">
         <div class="payslip-header">
           <div>
-            <strong>Pay Period: ${p.pay_period}</strong><br/>
+            <strong>${p.employee_name} (${p.employee_id})</strong><br/>
             <small style="color: var(--slate-500);">${p.job_title} • ${p.department}</small>
           </div>
-          <span class="badge badge-success">${p.status}</span>
+          <span class="badge badge-success">Disbursed</span>
         </div>
-        <div class="payslip-row"><span>Base Salary:</span><strong>$${p.base_salary.toFixed(2)}</strong></div>
-        <div class="payslip-row"><span>Allowances:</span><strong style="color: var(--success);">+$${p.allowances.toFixed(2)}</strong></div>
-        <div class="payslip-row"><span>Tax & Deductions:</span><strong style="color: var(--danger);">-$${p.deductions.toFixed(2)}</strong></div>
-        <div class="payslip-net"><span>Net Pay Disbursed:</span><span>$${p.net_pay.toFixed(2)}</span></div>
+        <div class="payslip-row"><span>salary_base:</span><strong>$${p.salary_base.toFixed(2)}</strong></div>
+        <div class="payslip-row"><span>salary_allowances:</span><strong style="color: var(--success);">+$${p.salary_allowances.toFixed(2)}</strong></div>
+        <div class="payslip-row"><span>salary_deductions:</span><strong style="color: var(--danger);">-$${p.salary_deductions.toFixed(2)}</strong></div>
+        <div class="payslip-net"><span>Calculated net_salary:</span><span>$${p.net_salary.toFixed(2)}</span></div>
         <button class="btn btn-sm btn-outline btn-block" style="margin-top: 1rem;" onclick="window.print()">🖨️ Print Payslip</button>
       </div>
     `).join('');
@@ -855,11 +1030,21 @@ async function loadEmployeePayslips() {
   }
 }
 
-// Profile
+// ==========================================
+// PROMPT 5: PROFILE MANAGEMENT
+// ==========================================
+
 async function loadEmployeeProfile() {
   const res = await apiRequest('/api/v1/profile');
   if (res.ok) {
     const p = res.data.profile;
+    document.getElementById('prof-view-name').textContent = p.full_name;
+    document.getElementById('prof-view-job').textContent = `${p.job_title} • ${p.department} (Joined: ${p.joining_date})`;
+    document.getElementById('prof-view-avatar').src = p.profile_picture_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
+    document.getElementById('prof-view-docs').href = p.documents_url || '#';
+    document.getElementById('prof-view-salary-base').textContent = `$${p.salary_base.toFixed(2)}`;
+    document.getElementById('prof-view-net-salary').textContent = `$${p.net_salary.toFixed(2)}`;
+
     document.getElementById('prof-phone-input').value = p.phone === 'Not provided' ? '' : p.phone;
     document.getElementById('prof-address-input').value = p.address === 'Not provided' ? '' : p.address;
     document.getElementById('prof-avatar-input').value = p.profile_picture_url || '';
@@ -878,6 +1063,7 @@ async function submitSelfProfileUpdate(e) {
   const res = await apiRequest('/api/v1/profile/self', 'PATCH', { phone, address, profile_picture_url });
   if (res.ok) {
     showAlert(alertEl, 'Profile updated successfully!', 'success');
+    loadEmployeeProfile();
   } else {
     showAlert(alertEl, 'Failed to update profile.');
   }
@@ -940,16 +1126,18 @@ function initApp() {
 // Window globals for inline HTML triggers
 window.switchAdminTab = switchAdminTab;
 window.switchEmpTab = switchEmpTab;
+window.handleContextUserChange = handleContextUserChange;
 window.actionFlaggedAttendance = actionFlaggedAttendance;
 window.promptEditEmployee = promptEditEmployee;
 window.unlockEmployeeAccount = unlockEmployeeAccount;
 window.actionLeave = actionLeave;
 window.promptAdjustPayroll = promptAdjustPayroll;
-window.finalizePayrollCycle = finalizePayrollCycle;
 window.setKioskLocationPreset = setKioskLocationPreset;
 window.captureLiveGPS = captureLiveGPS;
 window.executeKioskCheckIn = executeKioskCheckIn;
 window.executeKioskCheckOut = executeKioskCheckOut;
+window.setCalendarViewMode = setCalendarViewMode;
+window.loadEmployeeCalendar = loadEmployeeCalendar;
 window.submitLeaveApplication = submitLeaveApplication;
 window.submitSelfProfileUpdate = submitSelfProfileUpdate;
 window.openVerifyModal = openVerifyModal;

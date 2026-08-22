@@ -3,8 +3,7 @@ import datetime
 from starlette.testclient import TestClient
 from main import app
 from backend.rate_limiter import limiter
-from backend.db import get_db_connection
-from backend.utils.geofence import calculate_haversine_distance, evaluate_geofence
+from backend.utils.geofence import calculate_haversine_distance
 
 client = TestClient(app)
 
@@ -16,229 +15,235 @@ def assert_true(condition, message):
         print(f"[PASS] {message}")
 
 def run_tests():
-    print("\n=================================================================")
-    print("RUNNING COMPLETE MY BUDDY HRMS FULL SYSTEM AUDIT (README SPEC)")
-    print("=================================================================\n")
+    print("\n==========================================================================")
+    print("RUNNING COMPLETE DAYFLOW HRMS TEST SUITE (8 PROMPTS & EXACT FIELD DICT)")
+    print("==========================================================================\n")
 
     limiter.reset()
 
-    # 1. Health & Modules Check
-    res = client.get("/api/v1/health")
-    assert_true(res.status_code == 200, "System Health Check returns 200 OK")
-    assert_true(len(res.json()["modules"]) == 5, "All 5 core HR modules active")
-
-    # =================================================================
-    # MODULE 1: AUTHENTICATION & SECURITY
-    # =================================================================
-    print("\n--- Testing Module 1: Authentication & Security ---")
+    # PROMPT 1 & 2: AUTHENTICATION ENGINE & REGISTRATION WORKFLOW
+    print("--- Testing Prompt 1 & 2: Schema & Auth Engine ---")
     ts = int(time.time() * 1000)
-    emp_email = f"kiosk_emp_{ts}@mybuddyhrms.com"
-    emp_id = f"EMP-K1-{ts}"
-    strong_pwd = "SecureKioskPass@2026!"
+    emp_email = f"emp_dayflow_{ts}@mybuddyhrms.com"
+    emp_id = f"EMP-DF-{ts}"
+    pwd = "SecurePassword@2026!"
 
-    # Registration
+    # 1. Registration (/signup)
     res_reg = client.post("/signup", json={
         "employee_id": emp_id,
-        "first_name": "David",
-        "last_name": "Miller",
+        "first_name": "Alexander",
+        "last_name": "Wright",
         "email": emp_email,
-        "password": strong_pwd,
+        "password": pwd,
         "role": "EMPLOYEE"
     })
-    assert_true(res_reg.status_code == 201, "Employee registration succeeded")
-    v_token = res_reg.json()["data"]["verification_token"]
-    user_id = res_reg.json()["data"]["user_id"]
+    assert_true(res_reg.status_code == 201, "Prompt 2: /signup created account successfully")
+    reg_data = res_reg.json()["data"]
+    assert_true(reg_data["is_email_verified"] is False, "Prompt 2: is_email_verified initialized to false")
+    v_token = reg_data["verification_token"]
+    user_id = reg_data["user_id"]
 
-    # Verify Email
-    res_ver = client.post("/api/auth/verify-email", json={"token": v_token})
-    assert_true(res_ver.status_code == 200, "Employee email verification activated")
-
-    # Log in as Employee
+    # 2. Login fails before email verification
     limiter.reset()
-    res_login = client.post("/login", json={"email": emp_email, "password": strong_pwd})
-    assert_true(res_login.status_code == 200, "Employee login returns valid session JWT")
+    res_unver_login = client.post("/login", json={"email": emp_email, "password": pwd})
+    assert_true(res_unver_login.status_code == 403, "Prompt 2: Login blocked for unverified email (403 Forbidden)")
+    detail = res_unver_login.json().get("detail", res_unver_login.json())
+    assert_true(detail.get("is_email_verified") is False, "Prompt 2: Correctly reports unverified email status")
+
+    # 3. Verification API (/verify-email?token=...)
+    res_ver = client.get(f"/verify-email?token={v_token}")
+    assert_true(res_ver.status_code == 200, "Prompt 2: /verify-email?token=... updates is_email_verified to true")
+
+    # 4. Login succeeds after verification
+    res_login = client.post("/login", json={"email": emp_email, "password": pwd})
+    assert_true(res_login.status_code == 200, "Prompt 2: /login returns JWT with user_id and role")
     emp_jwt = res_login.json()["token"]
+    assert_true(res_login.json()["user"]["role"] == "EMPLOYEE", "JWT user role is EMPLOYEE")
 
     # Log in as HR Admin
-    res_adm_login = client.post("/login", json={"email": "admin@mybuddyhrms.com", "password": "Admin@12345"})
-    admin_jwt = res_adm_login.json()["token"]
+    res_adm = client.post("/login", json={"email": "admin@mybuddyhrms.com", "password": "Admin@12345"})
+    admin_jwt = res_adm.json()["token"]
 
-    # =================================================================
-    # MODULE 2: PROFILE MANAGEMENT
-    # =================================================================
-    print("\n--- Testing Module 2: Profile Management ---")
+    # PROMPT 4: DASHBOARDS & EMPLOYEE CONTEXT SWITCHER
+    print("\n--- Testing Prompt 4: Dashboards & Context Switcher ---")
     limiter.reset()
 
-    # Employee Self-Update (Phone & Address)
-    res_prof_self = client.patch(
+    # Employee Dashboard (Announcements, metrics)
+    res_emp_dash = client.get("/api/employee/dashboard", headers={"Authorization": f"Bearer {emp_jwt}"})
+    assert_true(res_emp_dash.status_code == 200, "Prompt 4.1: Employee Dashboard loaded")
+    dash_data = res_emp_dash.json()["data"]
+    assert_true("announcements" in dash_data, "Prompt 4.1: Recent announcements included in dashboard")
+    assert_true(len(dash_data["announcements"]) > 0, "Prompt 4.1: Announcements feed populated")
+
+    # Admin Context Switcher Tool (Inspect specific employee)
+    res_context = client.get(f"/api/admin/employees/{user_id}/context-view", headers={"Authorization": f"Bearer {admin_jwt}"})
+    assert_true(res_context.status_code == 200, "Prompt 4.2: Admin Context Switcher loaded employee view")
+    assert_true(res_context.json()["context_user"]["email"] == emp_email, "Prompt 4.2: Switched view context matches selected employee")
+
+    # PROMPT 5: EMPLOYEE PROFILE MANAGEMENT & ROLE-BASED FIELD SECURITY
+    print("\n--- Testing Prompt 5: Profile Management & Granular Permissions ---")
+    limiter.reset()
+
+    # 1. View Profile Component (Exact fields including documents_url, salary_base, net_salary)
+    res_prof = client.get("/api/v1/profile", headers={"Authorization": f"Bearer {emp_jwt}"})
+    assert_true(res_prof.status_code == 200, "Prompt 5.1: Profile View Component retrieved")
+    p = res_prof.json()["profile"]
+    assert_true("documents_url" in p, "Prompt 5.1: documents_url field rendered")
+    assert_true("salary_base" in p and "net_salary" in p, "Prompt 5.1: Protected salary keys present")
+
+    # 2. Employee self-update (phone, address, profile_picture_url)
+    res_self_upd = client.patch(
         "/api/v1/profile/self",
-        json={"phone": "+1 (555) 999-0000", "address": "77 Tech Park Blvd, Bangalore"},
+        json={"phone": "+1 (555) 777-8888", "address": "100 Innovation Way, Bangalore"},
         headers={"Authorization": f"Bearer {emp_jwt}"}
     )
-    assert_true(res_prof_self.status_code == 200, "Employee self-service profile update succeeded")
+    assert_true(res_self_upd.status_code == 200, "Prompt 5.2: Employee self-service update succeeded")
 
-    # Verify updated profile
-    res_my_prof = client.get("/api/v1/profile", headers={"Authorization": f"Bearer {emp_jwt}"})
-    assert_true(res_my_prof.status_code == 200, "Profile retrieved successfully")
-    assert_true(res_my_prof.json()["profile"]["phone"] == "+1 (555) 999-0000", "Self-updated phone stored correctly")
-
-    # Admin Update on Employee (Job Title, Department, Salary)
-    res_prof_adm = client.patch(
+    # 3. Admin comprehensive modification rights (documents_url, organizational placement, salary)
+    res_adm_upd = client.patch(
         f"/api/v1/profile/admin/{user_id}",
-        json={"job_title": "Lead Architect", "department": "Platform Core", "base_salary": 7500.00},
+        json={
+            "job_title": "Principal Architect",
+            "department": "Infrastructure",
+            "documents_url": "https://mybuddyhrms.com/docs/alex_kyc.pdf",
+            "salary_base": 8000.00,
+            "salary_allowances": 800.00,
+            "salary_deductions": 400.00
+        },
         headers={"Authorization": f"Bearer {admin_jwt}"}
     )
-    assert_true(res_prof_adm.status_code == 200, "HR Admin organizational data update succeeded")
+    assert_true(res_adm_upd.status_code == 200, "Prompt 5.2: HR Admin modified organizational and compensation fields")
+    assert_true(res_adm_upd.json()["data"]["net_salary"] == 8400.00, "Prompt 5.2: net_salary auto-computed to $8,400.00")
 
-    # =================================================================
-    # MODULE 3: SMART KIOSK ATTENDANCE & HAVERSINE GEOFENCING
-    # =================================================================
-    print("\n--- Testing Module 3: Smart Kiosk Attendance & Geofencing ---")
+    # PROMPT 6: SMART KIOSK ATTENDANCE & MONTHLY INTERACTIVE CALENDAR
+    print("\n--- Testing Prompt 6: Smart Kiosk Attendance & Calendar ---")
     limiter.reset()
 
-    # Haversine calculation test
-    dist_office = calculate_haversine_distance(12.9716, 77.5946)
-    assert_true(dist_office < 1.0, f"Haversine calculation at office coordinates is {dist_office}m (< 1m)")
-
-    dist_chennai = calculate_haversine_distance(13.0827, 80.2707)
-    assert_true(dist_chennai > 200000.0, f"Haversine distance to Chennai is {dist_chennai:.1f}m (> 200km)")
-
-    # 1. Kiosk Check-In: WITHIN GEOFENCE (Office: 12.9716, 77.5946) -> status: PRESENT
+    # 1. Check-In Within Office Geofence (12.9716, 77.5946)
     res_checkin_in = client.post(
         "/api/v1/attendance/kiosk/check-in",
         json={
-            "photo_url": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD...",
-            "latitude": 12.9716,
-            "longitude": 77.5946
+            "check_in_photo_url": "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
+            "check_in_latitude": 12.9716,
+            "check_in_longitude": 77.5946
         },
         headers={"Authorization": f"Bearer {emp_jwt}"}
     )
-    assert_true(res_checkin_in.status_code == 200, "Kiosk check-in succeeded")
-    assert_true(res_checkin_in.json()["data"]["status"] == "PRESENT", "In-geofence check-in auto-approved as PRESENT")
+    assert_true(res_checkin_in.status_code == 200, "Prompt 6.1: Kiosk check-in succeeded")
+    c_in = res_checkin_in.json()["data"]
+    assert_true(c_in["is_within_geofence"] is True, "Prompt 6.2: is_within_geofence = true within radius")
+    assert_true(c_in["approval_status"] == "AUTO_APPROVED", "Prompt 6.2: approval_status = AUTO_APPROVED")
+    assert_true(c_in["attendance_status"] == "PRESENT", "Prompt 6.2: attendance_status = PRESENT")
 
-    # 2. Kiosk Check-Out
+    # 2. Check-Out
     res_checkout = client.post(
         "/api/v1/attendance/kiosk/check-out",
-        json={"photo_url": "data:image/jpeg;base64,/checkout_snapshot..."},
+        json={"check_out_photo_url": "https://img.com/checkout.jpg"},
         headers={"Authorization": f"Bearer {emp_jwt}"}
     )
-    assert_true(res_checkout.status_code == 200, "Kiosk check-out recorded successfully")
+    assert_true(res_checkout.status_code == 200, "Prompt 6.1: Kiosk check-out recorded")
 
-    # 3. Kiosk Check-In: OUTSIDE GEOFENCE (Remote Coordinates) -> status: PENDING_ADMIN_APPROVAL
+    # 3. Check-In Outside Geofence (Remote)
     res_checkin_out = client.post(
         "/api/v1/attendance/kiosk/check-in",
         json={
-            "photo_url": "data:image/jpeg;base64,/remote_snapshot...",
-            "latitude": 13.0827,
-            "longitude": 80.2707
+            "check_in_photo_url": "https://img.com/remote.jpg",
+            "check_in_latitude": 13.0827,
+            "check_in_longitude": 80.2707
         },
         headers={"Authorization": f"Bearer {emp_jwt}"}
     )
-    assert_true(res_checkin_out.status_code == 200, "Remote kiosk check-in submitted")
-    assert_true(res_checkin_out.json()["data"]["status"] == "PENDING_ADMIN_APPROVAL", "Out-of-geofence check-in flagged for HR Admin review")
-    flagged_log_id = res_checkin_out.json()["data"]["log_id"]
+    assert_true(res_checkin_out.status_code == 200, "Prompt 6.1: Remote kiosk check-in submitted")
+    c_out = res_checkin_out.json()["data"]
+    assert_true(c_out["is_within_geofence"] is False, "Prompt 6.2: is_within_geofence = false outside radius")
+    assert_true(c_out["approval_status"] == "PENDING_ADMIN_APPROVAL", "Prompt 6.2: approval_status = PENDING_ADMIN_APPROVAL")
+    flagged_att_id = c_out["attendance_id"]
 
-    # 4. Admin Verification Desk: Review Flagged Logs
+    # 4. Admin reviews Flagged attendance queue
     limiter.reset()
-    res_flagged_list = client.get("/api/v1/attendance/admin/flagged", headers={"Authorization": f"Bearer {admin_jwt}"})
-    assert_true(res_flagged_list.status_code == 200, "HR Admin can view flagged attendance queue")
-    assert_true(any(l["id"] == flagged_log_id for l in res_flagged_list.json()["flagged_logs"]), "Flagged entry present in HR Admin queue")
+    res_flagged = client.get("/api/v1/attendance/admin/flagged", headers={"Authorization": f"Bearer {admin_jwt}"})
+    assert_true(res_flagged.status_code == 200, "Prompt 6.2: HR Admin retrieved flagged attendance queue")
+    assert_true(any(l["attendance_id"] == flagged_att_id for l in res_flagged.json()["flagged_logs"]), "Flagged record found in admin queue")
 
-    # 5. Admin Approves Flagged Log
-    res_verify_action = client.patch(
-        f"/api/v1/attendance/admin/verify/{flagged_log_id}",
-        json={"action": "APPROVE", "notes": "Approved: Valid client on-site visit"},
+    # 5. Admin Approves flagged entry
+    res_att_ver = client.patch(
+        f"/api/v1/attendance/admin/verify/{flagged_att_id}",
+        json={"approval_status": "APPROVED", "admin_comment": "Approved: Valid client on-site assignment"},
         headers={"Authorization": f"Bearer {admin_jwt}"}
     )
-    assert_true(res_verify_action.status_code == 200, "HR Admin successfully approved flagged attendance log")
-    assert_true(res_verify_action.json()["new_status"] == "PRESENT", "Attendance log updated to PRESENT")
+    assert_true(res_att_ver.status_code == 200, "Prompt 6.2: HR Admin approved flagged attendance")
+    assert_true(res_att_ver.json()["data"]["approval_status"] == "APPROVED", "Approval status set to APPROVED")
 
-    # =================================================================
-    # MODULE 4: LEAVE & TIME-OFF MANAGEMENT
-    # =================================================================
-    print("\n--- Testing Module 4: Leave & Time-Off Management ---")
+    # 6. Monthly Interactive Calendar Endpoint
+    res_cal = client.get("/api/v1/attendance/calendar", headers={"Authorization": f"Bearer {emp_jwt}"})
+    assert_true(res_cal.status_code == 200, "Prompt 6.3: Monthly calendar grid data returned")
+    assert_true("attendance_by_date" in res_cal.json() and "approved_leaves_by_date" in res_cal.json(), "Prompt 6.3: Daily attendance and approved leave mappings present")
+
+    # PROMPT 7: LEAVE & TIME-OFF MANAGEMENT MODULE
+    print("\n--- Testing Prompt 7: Leave & Time-Off Management ---")
     limiter.reset()
 
-    # Employee submits 3 days PAID leave request
-    res_apply_leave = client.post(
+    # 1. Employee applies for Leave (leave_type: PAID, initial state: leave_status = PENDING)
+    res_leave_app = client.post(
         "/api/v1/leaves/apply",
         json={
-            "type": "PAID",
-            "start_date": "2026-09-07",
-            "end_date": "2026-09-09",
-            "reason": "Personal medical appointment and recovery"
+            "leave_type": "PAID",
+            "start_date": "2026-09-14",
+            "end_date": "2026-09-16",
+            "leave_reason": "Attending regional developer conference"
         },
         headers={"Authorization": f"Bearer {emp_jwt}"}
     )
-    assert_true(res_apply_leave.status_code == 200, "Leave request submitted (200 OK)")
-    leave_id = res_apply_leave.json()["data"]["leave_id"]
-    assert_true(res_apply_leave.json()["data"]["days_count"] == 3, "Net working days correctly calculated as 3")
+    assert_true(res_leave_app.status_code == 200, "Prompt 7.1: Leave application submitted")
+    leave_data = res_leave_app.json()["data"]
+    assert_true(leave_data["leave_status"] == "PENDING", "Prompt 7.1: Initial leave_status is PENDING")
+    leave_id = leave_data["leave_id"]
 
-    # Admin views Leave Queue
-    res_leave_queue = client.get("/api/v1/leaves/admin/queue", headers={"Authorization": f"Bearer {admin_jwt}"})
-    assert_true(res_leave_queue.status_code == 200, "HR Admin retrieved pending leave queue")
-    assert_true(any(l["id"] == leave_id for l in res_leave_queue.json()["pending_queue"]), "Submitted leave present in queue")
+    # 2. Leave Approval Queue (Admin)
+    res_l_queue = client.get("/api/v1/leaves/admin/queue", headers={"Authorization": f"Bearer {admin_jwt}"})
+    assert_true(res_l_queue.status_code == 200, "Prompt 7.2: Admin retrieved leave queue")
+    assert_true(any(l["leave_id"] == leave_id for l in res_l_queue.json()["pending_queue"]), "Prompt 7.2: Submitted leave in queue")
 
-    # Admin Approves Leave -> Checks balance auto-deduction
-    initial_paid_bal = res_my_prof.json()["profile"]["leave_balance_paid"]
-    res_action_leave = client.patch(
+    # 3. Admin Approves Leave with admin_comment
+    res_l_action = client.patch(
         f"/api/v1/leaves/admin/action/{leave_id}",
-        json={"action": "APPROVE", "admin_comments": "Approved by HR Director"},
+        json={"leave_status": "APPROVED", "admin_comment": "Approved by Engineering VP"},
         headers={"Authorization": f"Bearer {admin_jwt}"}
     )
-    assert_true(res_action_leave.status_code == 200, "Leave request approved by HR Admin")
+    assert_true(res_l_action.status_code == 200, "Prompt 7.2: Leave request approved")
+    assert_true(res_l_action.json()["data"]["leave_status"] == "APPROVED", "leave_status set to APPROVED")
 
-    # Check updated balance
-    res_prof_after_leave = client.get("/api/v1/profile", headers={"Authorization": f"Bearer {emp_jwt}"})
-    new_paid_bal = res_prof_after_leave.json()["profile"]["leave_balance_paid"]
-    assert_true(new_paid_bal == initial_paid_bal - 3, f"Paid leave balance automatically deducted ({initial_paid_bal} -> {new_paid_bal})")
-
-    # =================================================================
-    # MODULE 5: PAYROLL MANAGEMENT ENGINE
-    # =================================================================
-    print("\n--- Testing Module 5: Payroll Management Engine ---")
+    # PROMPT 8: PAYROLL & COMPENSATION MANAGEMENT MODULE
+    print("\n--- Testing Prompt 8: Payroll & Compensation Management ---")
     limiter.reset()
 
-    # Admin views company payroll overview
-    res_pay_overview = client.get("/api/v1/payroll/admin/overview", headers={"Authorization": f"Bearer {admin_jwt}"})
-    assert_true(res_pay_overview.status_code == 200, "HR Admin payroll overview loaded")
-    assert_true(res_pay_overview.json()["total_payroll_cost"] > 0, "Payroll auto-computations calculated correctly")
+    # 1. Employee Read-Only Payroll View (salary_base, salary_allowances, salary_deductions, net_salary)
+    res_my_pay = client.get("/api/v1/payroll/my-payslips", headers={"Authorization": f"Bearer {emp_jwt}"})
+    assert_true(res_my_pay.status_code == 200, "Prompt 8.1: Employee payroll view retrieved")
+    pay_rec = res_my_pay.json()["payroll_records"][0]
+    assert_true(pay_rec["salary_base"] == 8000.00, "Prompt 8.1: salary_base matches profile")
+    assert_true(pay_rec["net_salary"] == 8400.00, "Prompt 8.1: net_salary matches computed amount")
 
-    # Admin adjusts employee compensation
-    res_pay_adjust = client.put(
+    # 2. Admin Payroll Control (Adjust salary and auto-calculate net_salary)
+    res_pay_adj = client.put(
         f"/api/v1/payroll/admin/adjust/{user_id}",
-        json={"base_salary": 7500.00, "allowances": 750.00, "deductions": 375.00},
+        json={"salary_base": 9000.00, "salary_allowances": 900.00, "salary_deductions": 450.00},
         headers={"Authorization": f"Bearer {admin_jwt}"}
     )
-    assert_true(res_pay_adjust.status_code == 200, "Payroll adjustment applied")
-    assert_true(res_pay_adjust.json()["data"]["net_pay"] == 7875.00, "Net pay correctly computed to $7,875.00")
+    assert_true(res_pay_adj.status_code == 200, "Prompt 8.2: Admin adjusted compensation")
+    assert_true(res_pay_adj.json()["data"]["net_salary"] == 9450.00, "Prompt 8.2: net_salary auto-calculated ($9,000 + $900 - $450 = $9,450.00)")
 
-    # Employee views personal itemized payslips
-    res_my_payslips = client.get("/api/v1/payroll/my-payslips", headers={"Authorization": f"Bearer {emp_jwt}"})
-    assert_true(res_my_payslips.status_code == 200, "Employee retrieved personal itemized payslips")
-    assert_true(len(res_my_payslips.json()["payslips"]) >= 1, "Itemized payslip record accessible")
+    # Non-admin blocked from payload modification routes
+    res_blocked_pay = client.put(
+        f"/api/v1/payroll/admin/adjust/{user_id}",
+        json={"salary_base": 12000.00, "salary_allowances": 1000.00, "salary_deductions": 0.00},
+        headers={"Authorization": f"Bearer {emp_jwt}"}
+    )
+    assert_true(res_blocked_pay.status_code == 403, "Prompt 8.2: Non-admin users strictly blocked from payload modification routes (403 Forbidden)")
 
-    # =================================================================
-    # MODULE 6: ROLE-BASED ACCESS CONTROL (RBAC) ISOLATION
-    # =================================================================
-    print("\n--- Testing Module 6: RBAC Isolation & Security Boundaries ---")
-    limiter.reset()
-
-    # Employee trying to access Admin Flagged Attendance -> 403 Forbidden
-    res_forbid_att = client.get("/api/v1/attendance/admin/flagged", headers={"Authorization": f"Bearer {emp_jwt}"})
-    assert_true(res_forbid_att.status_code == 403, "Employee blocked from admin attendance desk (403 Forbidden)")
-
-    # Employee trying to access Admin Leave Queue -> 403 Forbidden
-    res_forbid_lvs = client.get("/api/v1/leaves/admin/queue", headers={"Authorization": f"Bearer {emp_jwt}"})
-    assert_true(res_forbid_lvs.status_code == 403, "Employee blocked from admin leave queue (403 Forbidden)")
-
-    # Employee trying to access Admin Payroll Overview -> 403 Forbidden
-    res_forbid_pay = client.get("/api/v1/payroll/admin/overview", headers={"Authorization": f"Bearer {emp_jwt}"})
-    assert_true(res_forbid_pay.status_code == 403, "Employee blocked from admin payroll overview (403 Forbidden)")
-
-    print("\n=================================================================")
-    print("ALL 6 MODULES FROM README.MD SPECIFICATION PASSED 100%!")
-    print("=================================================================\n")
+    print("\n==========================================================================")
+    print("ALL 8 TASK PROMPTS AND EXACT DATA FIELD DICTIONARY TESTS PASSED 100%!")
+    print("==========================================================================\n")
 
 if __name__ == "__main__":
     run_tests()

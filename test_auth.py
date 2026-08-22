@@ -76,17 +76,20 @@ def run_tests():
     # Attempt 1: Wrong Password
     res_fail1 = client.post("/login", json={"email": emp1_email, "password": "WrongPassword1!"})
     assert_true(res_fail1.status_code == 401, "Attempt 1 failed with 401 Unauthorized")
-    assert_true(res_fail1.json().get("trials_remaining") == 2, "Response indicates 2 trials remaining")
+    d1 = res_fail1.json().get("detail", res_fail1.json())
+    assert_true(d1.get("trials_remaining") == 2, "Response indicates 2 trials remaining")
 
     # Attempt 2: Wrong Password
     res_fail2 = client.post("/login", json={"email": emp1_email, "password": "WrongPassword2!"})
     assert_true(res_fail2.status_code == 401, "Attempt 2 failed with 401 Unauthorized")
-    assert_true(res_fail2.json().get("trials_remaining") == 1, "Response indicates 1 trial remaining")
+    d2 = res_fail2.json().get("detail", res_fail2.json())
+    assert_true(d2.get("trials_remaining") == 1, "Response indicates 1 trial remaining")
 
     # Attempt 3: Wrong Password -> LOCKOUT TRIGGERED
     res_fail3 = client.post("/login", json={"email": emp1_email, "password": "WrongPassword3!"})
     assert_true(res_fail3.status_code == 423, "Attempt 3 triggers 423 Locked status")
-    assert_true(res_fail3.json().get("account_locked") is True, "Account is flagged as locked")
+    d3 = res_fail3.json().get("detail", res_fail3.json())
+    assert_true(d3.get("is_locked") is True or d3.get("account_locked") is True, "Account is flagged as locked")
 
     # Attempt 4: Even with correct password, login is blocked while locked
     res_lock_check = client.post("/login", json={"email": emp1_email, "password": strong_pass})

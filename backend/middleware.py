@@ -9,6 +9,8 @@ from backend.db import get_db_connection
 
 # Inactivity timeout: 120 seconds (2 minutes)
 INACTIVITY_TIMEOUT_SECONDS = 120
+MAX_LOGIN_ATTEMPTS = 3
+LOCKOUT_MINUTES = 15
 
 async def get_current_user(authorization: Union[str, None] = Header(default=None)):
     """
@@ -45,7 +47,7 @@ async def get_current_user(authorization: Union[str, None] = Header(default=None
         # Check server-side 2-minute inactivity
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, last_activity, role, is_verified FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT id, last_activity, role, is_email_verified FROM users WHERE id = ?", (user_id,))
         user = cursor.fetchone()
 
         if not user:
@@ -58,9 +60,10 @@ async def get_current_user(authorization: Union[str, None] = Header(default=None
 
         if user["last_activity"]:
             try:
-                # Handle SQLite timestamp format
                 last_act = datetime.datetime.fromisoformat(user["last_activity"])
-                now = datetime.datetime.now(datetime.timezone.utc if last_act.tzinfo else None)
+                if last_act.tzinfo is None:
+                    last_act = last_act.replace(tzinfo=datetime.timezone.utc)
+                now = datetime.datetime.now(datetime.timezone.utc)
                 elapsed_seconds = (now - last_act).total_seconds()
 
                 if elapsed_seconds > INACTIVITY_TIMEOUT_SECONDS:

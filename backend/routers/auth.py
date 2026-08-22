@@ -1,257 +1,117 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import JSONResponse
-import secrets
-import sqlite3
 import datetime
+import sqlite3
+import secrets
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from pydantic import BaseModel, EmailStr
 
 from backend.db import get_db
-from backend.schemas import SignupRequest, LoginRequest, VerifyEmailRequest
-from backend.security import validate_password_strength, hash_password, verify_password, create_access_token
-from backend.middleware import get_current_user
+from backend.security import hash_password, verify_password, validate_password_strength, create_access_token
+from backend.middleware import get_current_user, MAX_LOGIN_ATTEMPTS, LOCKOUT_MINUTES
+from backend.schemas import UserSignUpSchema, UserLoginSchema, VerifyEmailSchema
 
-router = APIRouter(tags=["Authentication"])
-
-MAX_FAILED_TRIALS = 3
-LOCKOUT_MINUTES = 15
+router = APIRouter(prefix="", tags=["Authentication Engine (Prompt 2)"])
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
 @router.post("/api/auth/signup", status_code=status.HTTP_201_CREATED)
-async def signup(payload: SignupRequest, db: sqlite3.Connection = Depends(get_db)):
+@router.post("/api/v1/auth/register", status_code=status.HTTP_201_CREATED)
+async def signup(payload: UserSignUpSchema, db: sqlite3.Connection = Depends(get_db)):
     """
-    Registration endpoint (/signup and /api/auth/signup)
-    Accepts: employee_id, first_name, last_name, email, password, role
-    Validates: Password strength, duplicate email, duplicate employee_id
+    Prompt 2: Registration Endpoint taking employee_id, first_name, last_name, email, password, and role.
+    Triggers automated verification token generation and sets is_email_verified = false.
     """
-    clean_email = str(payload.email).strip().lower()
-    clean_emp_id = payload.employee_id.strip()
-
-    # 1. Password Strength Validation
-    is_strong, strength_msg, details = validate_password_strength(payload.password)
+    # 1. Password security strength validation
+    is_strong, msg, _ = validate_password_strength(payload.password)
     if not is_strong:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "success": False,
-                "message": strength_msg,
-                "errors": {"password": strength_msg},
-                "password_details": details
-            }
+            detail={"success": False, "message": msg}
         )
 
     cursor = db.cursor()
 
-    # 2. Duplicate Email Check
-    cursor.execute("SELECT id FROM users WHERE email = ?", (clean_email,))
+    # 2. Duplicate email check
+    cursor.execute("SELECT id FROM users WHERE email = ? COLLATE NOCASE", (payload.email,))
     if cursor.fetchone():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "success": False,
-                "message": "An account with this email address already exists.",
-                "field": "email"
-            }
+            detail={"success": False, "message": f"An employee account with email '{payload.email}' already exists."}
         )
 
-    # 3. Duplicate Employee ID Check
-    cursor.execute("SELECT id FROM users WHERE employee_id = ?", (clean_emp_id,))
+    # 3. Duplicate employee_id check
+    cursor.execute("SELECT id FROM users WHERE employee_id = ?", (payload.employee_id,))
     if cursor.fetchone():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "success": False,
-                "message": f'Employee ID "{clean_emp_id}" is already registered.',
-                "field": "employee_id"
-            }
+            detail={"success": False, "message": f"Employee ID '{payload.employee_id}' is already registered."}
         )
 
-    # 4. Hash password & generate verification token
-    password_hash = hash_password(payload.password)
-    verification_token = secrets.token_hex(32)
-    now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    # 4. Create user record with is_email_verified = false
+    pwd_hash = hash_password(payload.password)
+    verification_token = secrets.token_urlsafe(32)
 
     cursor.execute("""
-        INSERT INTO users (employee_id, first_name, last_name, email, password_hash, role, is_verified, verification_token, failed_login_attempts, locked_until, last_activity)
-        VALUES (?, ?, ?, ?, ?, ?, 0, ?, 0, NULL, ?)
+        INSERT INTO users (
+            employee_id, first_name, last_name, email, password_hash, role,
+            is_email_verified, verification_token,
+            salary_base, salary_allowances, salary_deductions, net_salary,
+            created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, 0, ?, 5000.00, 500.00, 250.00, 5250.00, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     """, (
-        clean_emp_id,
+        payload.employee_id.strip(),
         payload.first_name.strip(),
         payload.last_name.strip(),
-        clean_email,
-        password_hash,
+        payload.email.strip().lower(),
+        pwd_hash,
         payload.role,
-        verification_token,
-        now_str
+        verification_token
     ))
     db.commit()
     user_id = cursor.lastrowid
 
-    return {
-        "success": True,
-        "message": "User registration successful! Please verify your email to activate your account.",
-        "data": {
-            "user_id": user_id,
-            "employee_id": clean_emp_id,
-            "first_name": payload.first_name.strip(),
-            "last_name": payload.last_name.strip(),
-            "email": clean_email,
-            "role": payload.role,
-            "is_verified": False,
-            "verification_token": verification_token
-        }
-    }
-
-@router.post("/login")
-@router.post("/api/auth/login")
-async def login(payload: LoginRequest, db: sqlite3.Connection = Depends(get_db)):
-    """
-    Login endpoint (/login and /api/auth/login)
-    Features:
-    - 3-trial account lockout on incorrect attempts
-    - Rate limit feedback
-    - Email verification check
-    - Session JWT issuance
-    """
-    clean_email = str(payload.email).strip().lower()
-    cursor = db.cursor()
-
-    cursor.execute("SELECT * FROM users WHERE email = ?", (clean_email,))
-    user = cursor.fetchone()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"success": False, "message": "Invalid email or password."}
-        )
-
-    now = datetime.datetime.now(datetime.timezone.utc)
-
-    # 1. Check if Account is currently Locked
-    if user["locked_until"]:
-        try:
-            lock_time = datetime.datetime.fromisoformat(user["locked_until"])
-            if lock_time.tzinfo is None:
-                lock_time = lock_time.replace(tzinfo=datetime.timezone.utc)
-            if now < lock_time:
-                remaining_secs = int((lock_time - now).total_seconds())
-                remaining_mins = max(1, remaining_secs // 60)
-                return JSONResponse(
-                    status_code=status.HTTP_423_LOCKED,
-                    content={
-                        "success": False,
-                        "account_locked": True,
-                        "message": f"Account is locked due to 3 consecutive failed login attempts. Please try again in {remaining_mins} minute(s) or contact HR Admin.",
-                        "remaining_seconds": remaining_secs
-                    }
-                )
-            else:
-                # Lockout duration has passed; automatically unlock
-                cursor.execute("UPDATE users SET locked_until = NULL, failed_login_attempts = 0 WHERE id = ?", (user["id"],))
-                db.commit()
-        except Exception:
-            pass
-
-    # 2. Check Password Validity
-    is_valid_pass = verify_password(payload.password, user["password_hash"])
-
-    if not is_valid_pass:
-        # Increment failed login attempts
-        new_failed = (user["failed_login_attempts"] or 0) + 1
-
-        if new_failed >= MAX_FAILED_TRIALS:
-            lockout_until = (now + datetime.timedelta(minutes=LOCKOUT_MINUTES)).isoformat()
-            cursor.execute("""
-                UPDATE users 
-                SET failed_login_attempts = ?, locked_until = ? 
-                WHERE id = ?
-            """, (new_failed, lockout_until, user["id"]))
-            db.commit()
-
-            return JSONResponse(
-                status_code=status.HTTP_423_LOCKED,
-                content={
-                    "success": False,
-                    "account_locked": True,
-                    "trials_remaining": 0,
-                    "message": f"Account locked: 3 consecutive incorrect login trials reached. Locked for {LOCKOUT_MINUTES} minutes."
-                }
-            )
-        else:
-            cursor.execute("UPDATE users SET failed_login_attempts = ? WHERE id = ?", (new_failed, user["id"]))
-            db.commit()
-            trials_remaining = MAX_FAILED_TRIALS - new_failed
-
-            return JSONResponse(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                content={
-                    "success": False,
-                    "trials_remaining": trials_remaining,
-                    "message": f"Invalid email or password. You have {trials_remaining} trial(s) remaining before account lockout."
-                }
-            )
-
-    # 3. Successful password validation -> Reset failed attempts & update activity
+    # Create matching initial payroll entry
     cursor.execute("""
-        UPDATE users 
-        SET failed_login_attempts = 0, locked_until = NULL, last_activity = ? 
-        WHERE id = ?
-    """, (now.isoformat(), user["id"]))
+        INSERT INTO payroll (user_id, salary_base, salary_allowances, salary_deductions, net_salary)
+        VALUES (?, 5000.00, 500.00, 250.00, 5250.00)
+    """, (user_id,))
     db.commit()
 
-    # 4. Check email verification status
-    if user["is_verified"] == 0:
-        return JSONResponse(
-            status_code=status.HTTP_403_FORBIDDEN,
-            content={
-                "success": False,
-                "is_verified": False,
-                "message": "Account email has not been verified. Please complete email verification before logging in.",
-                "email": user["email"],
-                "verification_token": user["verification_token"]
-            }
-        )
-
-    # 5. Generate JWT token containing user_id, employee_id, role, and email
-    token_payload = {
-        "user_id": user["id"],
-        "employee_id": user["employee_id"],
-        "first_name": user["first_name"],
-        "last_name": user["last_name"],
-        "email": user["email"],
-        "role": user["role"]
-    }
-    token = create_access_token(token_payload)
-
     return {
         "success": True,
-        "message": "Login successful.",
-        "token": token,
-        "user": {
-            "id": user["id"],
-            "user_id": user["id"],
-            "employee_id": user["employee_id"],
-            "first_name": user["first_name"],
-            "last_name": user["last_name"],
-            "email": user["email"],
-            "role": user["role"],
-            "is_verified": bool(user["is_verified"])
+        "message": "Account registered successfully. Automated verification link generated.",
+        "data": {
+            "user_id": user_id,
+            "employee_id": payload.employee_id,
+            "email": payload.email,
+            "role": payload.role,
+            "is_email_verified": False,
+            "verification_token": verification_token,
+            "verification_url": f"/verify-email?token={verification_token}"
         }
     }
 
+@router.get("/verify-email")
 @router.post("/verify-email")
 @router.post("/api/auth/verify-email")
-async def verify_email(payload: VerifyEmailRequest, db: sqlite3.Connection = Depends(get_db)):
+@router.post("/api/v1/auth/verify-email")
+async def verify_email(
+    token: str = Query(default=None),
+    payload: VerifyEmailSchema = None,
+    db: sqlite3.Connection = Depends(get_db)
+):
     """
-    Email verification endpoint to activate registered accounts.
+    Prompt 2: Verification API (/verify-email?token=...) updating is_email_verified = true.
     """
-    cursor = db.cursor()
-    user = None
+    actual_token = token or (payload.token if payload else None)
+    if not actual_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"success": False, "message": "Verification token is required."}
+        )
 
-    if payload.token:
-        cursor.execute("SELECT * FROM users WHERE verification_token = ?", (payload.token.strip(),))
-        user = cursor.fetchone()
-    elif payload.email:
-        cursor.execute("SELECT * FROM users WHERE email = ?", (payload.email.strip().lower(),))
-        user = cursor.fetchone()
+    cursor = db.cursor()
+    cursor.execute("SELECT id, email, is_email_verified FROM users WHERE verification_token = ?", (actual_token,))
+    user = cursor.fetchone()
 
     if not user:
         raise HTTPException(
@@ -261,46 +121,179 @@ async def verify_email(payload: VerifyEmailRequest, db: sqlite3.Connection = Dep
 
     cursor.execute("""
         UPDATE users 
-        SET is_verified = 1, verification_token = NULL, updated_at = CURRENT_TIMESTAMP 
+        SET is_email_verified = 1, verification_token = NULL, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
     """, (user["id"],))
     db.commit()
 
     return {
         "success": True,
-        "message": f"Email verified successfully for {user['email']}. You may now log in.",
-        "email": user["email"]
+        "message": f"Email '{user['email']}' verified successfully! You may now sign in.",
+        "is_email_verified": True
     }
 
-@router.get("/api/auth/me")
-async def get_me(current_user: dict = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
+@router.post("/login")
+@router.post("/api/auth/login")
+@router.post("/api/v1/auth/login")
+async def login(payload: UserLoginSchema, request: Request, db: sqlite3.Connection = Depends(get_db)):
     """
-    Protected endpoint to retrieve current authenticated user profile.
+    Prompt 2: Login endpoint taking email and password.
+    Verifies credentials and email confirmation status (is_email_verified),
+    enforces 3-trials lockout policy, and returns JWT containing user_id and role.
     """
     cursor = db.cursor()
     cursor.execute("""
-        SELECT id, employee_id, first_name, last_name, email, role, is_verified, created_at, last_activity, failed_login_attempts, locked_until 
-        FROM users WHERE id = ?
-    """, (current_user["user_id"],))
+        SELECT id, employee_id, first_name, last_name, email, password_hash, role,
+               is_email_verified, verification_token, failed_login_attempts, locked_until
+        FROM users WHERE email = ? COLLATE NOCASE
+    """, (payload.email.strip().lower(),))
     user = cursor.fetchone()
 
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    # User existence check
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"success": False, "message": "User profile not found."}
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"success": False, "message": "Invalid email or password credentials."}
         )
+
+    # 1. Check account lockout status
+    if user["locked_until"]:
+        try:
+            locked_time = datetime.datetime.fromisoformat(user["locked_until"])
+            if locked_time > now:
+                mins_left = max(1, int((locked_time - now).total_seconds() / 60))
+                raise HTTPException(
+                    status_code=status.HTTP_423_LOCKED,
+                    detail={
+                        "success": False,
+                        "message": f"Account is temporarily locked due to 3 consecutive failed login attempts. Try again in {mins_left} minute(s) or contact HR Admin.",
+                        "is_locked": True,
+                        "locked_until": user["locked_until"]
+                    }
+                )
+        except ValueError:
+            pass
+
+    # 2. Verify password credentials
+    if not verify_password(payload.password, user["password_hash"]):
+        new_attempts = user["failed_login_attempts"] + 1
+        trials_left = max(0, MAX_LOGIN_ATTEMPTS - new_attempts)
+
+        if new_attempts >= MAX_LOGIN_ATTEMPTS:
+            locked_until = (now + datetime.timedelta(minutes=LOCKOUT_MINUTES)).isoformat()
+            cursor.execute("""
+                UPDATE users 
+                SET failed_login_attempts = ?, locked_until = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (new_attempts, locked_until, user["id"]))
+            db.commit()
+
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail={
+                    "success": False,
+                    "message": f"Account locked for {LOCKOUT_MINUTES} minutes due to 3 consecutive incorrect password attempts.",
+                    "is_locked": True,
+                    "locked_until": locked_until
+                }
+            )
+        else:
+            cursor.execute("UPDATE users SET failed_login_attempts = ? WHERE id = ?", (new_attempts, user["id"]))
+            db.commit()
+
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "success": False,
+                    "message": f"Invalid email or password credentials. {trials_left} trial(s) remaining before account lockout.",
+                    "trials_remaining": trials_left
+                }
+            )
+
+    # 3. Check email verification status
+    if not user["is_email_verified"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "success": False,
+                "message": "Email address is unverified. Please verify your email before logging in.",
+                "is_email_verified": False,
+                "verification_token": user["verification_token"]
+            }
+        )
+
+    # 4. Reset failed attempts & update last activity
+    cursor.execute("""
+        UPDATE users 
+        SET failed_login_attempts = 0, locked_until = NULL, last_activity = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    """, (now.isoformat(), user["id"]))
+    db.commit()
+
+    # 5. Issue session JWT containing user_id and role
+    token_payload = {
+        "user_id": user["id"],
+        "employee_id": user["employee_id"],
+        "email": user["email"],
+        "role": user["role"]
+    }
+    jwt_token = create_access_token(token_payload)
 
     return {
         "success": True,
+        "message": "Authentication successful.",
+        "token": jwt_token,
         "user": {
+            "user_id": user["id"],
             "id": user["id"],
             "employee_id": user["employee_id"],
             "first_name": user["first_name"],
             "last_name": user["last_name"],
             "email": user["email"],
             "role": user["role"],
-            "is_verified": bool(user["is_verified"]),
-            "last_activity": user["last_activity"],
-            "created_at": user["created_at"]
+            "is_email_verified": bool(user["is_email_verified"])
+        }
+    }
+
+@router.get("/api/auth/me")
+@router.get("/api/v1/auth/me")
+@router.get("/me")
+async def get_me(current_user: dict = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
+    """
+    Returns currently authenticated user identity context.
+    """
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT id, employee_id, first_name, last_name, email, role, phone, address, profile_picture_url,
+               job_title, department, joining_date, documents_url, salary_base, net_salary, is_email_verified
+        FROM users WHERE id = ?
+    """, (current_user["user_id"],))
+    u = cursor.fetchone()
+
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    return {
+        "success": True,
+        "user": {
+            "user_id": u["id"],
+            "id": u["id"],
+            "employee_id": u["employee_id"],
+            "first_name": u["first_name"],
+            "last_name": u["last_name"],
+            "email": u["email"],
+            "role": u["role"],
+            "phone": u["phone"],
+            "address": u["address"],
+            "profile_picture_url": u["profile_picture_url"],
+            "job_title": u["job_title"],
+            "department": u["department"],
+            "joining_date": u["joining_date"],
+            "documents_url": u["documents_url"],
+            "salary_base": float(u["salary_base"] or 0),
+            "net_salary": float(u["net_salary"] or 0),
+            "is_email_verified": bool(u["is_email_verified"])
         }
     }

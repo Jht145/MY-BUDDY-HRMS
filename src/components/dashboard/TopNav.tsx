@@ -5,7 +5,7 @@ import { BrandLogo } from '@/components/common/BrandLogo';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { AvatarMenu } from './AvatarMenu';
 
-type Tab = 'employees' | 'attendance' | 'timeoff';
+type Tab = 'dashboard' | 'employees' | 'attendance' | 'timeoff';
 
 interface TopNavProps {
   activeTab: Tab;
@@ -13,6 +13,7 @@ interface TopNavProps {
 }
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'dashboard', label: 'Dashboard' },
   { id: 'employees', label: 'Employees' },
   { id: 'attendance', label: 'Attendance' },
   { id: 'timeoff', label: 'Time Off' },

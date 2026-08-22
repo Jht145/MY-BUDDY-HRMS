@@ -7,15 +7,16 @@ import { TopNav } from '@/components/dashboard/TopNav';
 import { EmployeesTab } from '@/components/dashboard/EmployeesTab';
 import { AttendanceTab } from '@/components/dashboard/AttendanceTab';
 import { TimeOffTab } from '@/components/dashboard/TimeOffTab';
+import { MainDashboardTab } from '@/components/dashboard/MainDashboardTab';
 import { CheckInPanel } from '@/components/dashboard/CheckInPanel';
 import { Settings } from 'lucide-react';
 
-type Tab = 'employees' | 'attendance' | 'timeoff';
+type Tab = 'dashboard' | 'employees' | 'attendance' | 'timeoff';
 
 export default function DashboardPage() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<Tab>('employees');
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -41,6 +42,7 @@ export default function DashboardPage() {
         {/* Main content */}
         <main className="flex-1 flex flex-col overflow-y-auto">
           <div className="flex-1 p-5 sm:p-6">
+            {activeTab === 'dashboard' && <MainDashboardTab onNavigateToTab={setActiveTab} />}
             {activeTab === 'employees' && <EmployeesTab />}
             {activeTab === 'attendance' && <AttendanceTab />}
             {activeTab === 'timeoff' && <TimeOffTab />}

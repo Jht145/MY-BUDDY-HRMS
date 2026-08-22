@@ -57,10 +57,10 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
   // Load local storage flagged check-ins on mount & kiosk update
   const loadFlaggedLogs = () => {
     const mockCheckins: FlaggedCheckin[] = [
-      { name: 'Rohan Mehta', time: '08:57 AM', note: '128m from permitted location', coordinates: '12.9729, 77.5958', empId: 'EMP-1043', department: 'Operations' },
-      { name: 'Fatima Ali', time: '09:06 AM', note: 'No location signal', coordinates: 'Unknown / Blocked', empId: 'EMP-1044', department: 'Finance' },
-      { name: 'Arjun Das', time: '09:18 AM', note: 'Camera image needs review', coordinates: '12.9716, 77.5946', empId: 'EMP-1045', department: 'Customer Success' },
-      { name: 'Dev Vashisht', time: '09:30 AM', note: 'Kiosk Geofence Bypass Warning', coordinates: '13.0827, 80.2707', empId: 'EMP-1088', department: 'Product Engineering' },
+      { name: 'Rohan Mehta', time: '08:57 AM', note: '128m from permitted location', coordinates: '12.9729, 77.5958', empId: 'EMP-1043', department: 'Operations', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&fit=crop&q=80' },
+      { name: 'Fatima Ali', time: '09:06 AM', note: 'No location signal', coordinates: 'Unknown / Blocked', empId: 'EMP-1044', department: 'Finance', photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&fit=crop&q=80' },
+      { name: 'Arjun Das', time: '09:18 AM', note: 'Camera image needs review', coordinates: '12.9716, 77.5946', empId: 'EMP-1045', department: 'Customer Success', photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&fit=crop&q=80' },
+      { name: 'Dev Vashisht', time: '09:30 AM', note: 'Kiosk Geofence Bypass Warning', coordinates: '13.0827, 80.2707', empId: 'EMP-1088', department: 'Product Engineering', photo: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&fit=crop&q=80' },
     ];
     if (typeof window !== 'undefined') {
       const raw = localStorage.getItem('my_buddy_hrms_flagged_checkins');

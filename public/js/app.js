@@ -665,19 +665,17 @@ async function loadAdminPayroll() {
 }
 
 async function promptAdjustPayroll(userId, base, allow, ded) {
-  const newBase = prompt('salary_base ($):', base);
-  if (newBase === null) return;
-  const newAllow = prompt('salary_allowances ($):', allow);
-  if (newAllow === null) return;
-  const newDed = prompt('salary_deductions ($):', ded);
-  if (newDed === null) return;
+  const newWage = prompt('Enter Monthly Wage (Wage * 50% Basic, 50% HRA, PF 12%, PT ₹200):', base);
+  if (newWage === null) return;
 
   const res = await apiRequest(`/api/v1/payroll/admin/adjust/${userId}`, 'PUT', {
-    salary_base: parseFloat(newBase),
-    salary_allowances: parseFloat(newAllow),
-    salary_deductions: parseFloat(newDed)
+    monthly_wage: parseFloat(newWage)
   });
-  if (res.ok) loadAdminPayroll();
+  if (res.ok) {
+    loadAdminPayroll();
+  } else {
+    alert(res.data.detail?.message || res.data.message || 'Update failed.');
+  }
 }
 
 // ==========================================
@@ -1018,10 +1016,14 @@ async function loadEmployeePayslips() {
           </div>
           <span class="badge badge-success">Disbursed</span>
         </div>
-        <div class="payslip-row"><span>salary_base:</span><strong>$${p.salary_base.toFixed(2)}</strong></div>
-        <div class="payslip-row"><span>salary_allowances:</span><strong style="color: var(--success);">+$${p.salary_allowances.toFixed(2)}</strong></div>
-        <div class="payslip-row"><span>salary_deductions:</span><strong style="color: var(--danger);">-$${p.salary_deductions.toFixed(2)}</strong></div>
-        <div class="payslip-net"><span>Calculated net_salary:</span><span>$${p.net_salary.toFixed(2)}</span></div>
+        <div class="payslip-row"><span>Monthly Wage:</span><strong>$${(p.monthly_wage || p.salary_base).toFixed(2)}</strong></div>
+        <div class="payslip-row"><span>Basic Salary (50%):</span><span>$${(p.basic_salary || p.salary_base * 0.5).toFixed(2)}</span></div>
+        <div class="payslip-row"><span>HRA (50% of Basic):</span><span>+$${(p.hra || p.salary_base * 0.25).toFixed(2)}</span></div>
+        <div class="payslip-row"><span>Standard / Performance / LTA:</span><span>+$${((p.standard_allowance || 0) + (p.performance_bonus || 0) + (p.lta || 0)).toFixed(2)}</span></div>
+        <div class="payslip-row"><span>Fixed Allowance:</span><span>+$${(p.fixed_allowance || 0).toFixed(2)}</span></div>
+        <div class="payslip-row" style="color: var(--danger);"><span>PF Employee (12% of Basic):</span><span>-$${(p.pf_employee || p.basic_salary * 0.12 || 0).toFixed(2)}</span></div>
+        <div class="payslip-row" style="color: var(--danger);"><span>Professional Tax (PT):</span><span>-$${(p.professional_tax || 200.0).toFixed(2)}</span></div>
+        <div class="payslip-net"><span>Calculated Net Salary:</span><span>$${p.net_salary.toFixed(2)}</span></div>
         <button class="btn btn-sm btn-outline btn-block" style="margin-top: 1rem;" onclick="window.print()">🖨️ Print Payslip</button>
       </div>
     `).join('');

@@ -241,6 +241,32 @@ def run_tests():
     )
     assert_true(res_blocked_pay.status_code == 403, "Prompt 8.2: Non-admin users strictly blocked from payload modification routes (403 Forbidden)")
 
+    # 3. Phase 2: Granular 6-Step Backend Calculation Engine with Monthly Wage
+    print("\n--- Testing Phase 2: 6-Step Granular Salary Engine ---")
+    limiter.reset()
+    res_wage_calc = client.put(
+        f"/api/v1/payroll/admin/adjust/{user_id}",
+        json={"monthly_wage": 50000.00},
+        headers={"Authorization": f"Bearer {admin_jwt}"}
+    )
+    assert_true(res_wage_calc.status_code == 200, "Phase 2: Monthly wage computation executed")
+    calc_d = res_wage_calc.json()["data"]
+    # Step 1: Basic = 50,000 * 50% = 25,000
+    assert_true(calc_d["basic_salary"] == 25000.00, "Step 1: Basic Salary is 50% of Wage ($25,000.00)")
+    # Step 2: HRA = 25,000 * 50% = 12,500
+    assert_true(calc_d["hra"] == 12500.00, "Step 2: HRA is 50% of Basic ($12,500.00)")
+    # Step 3: Percentage-based allowances (Standard 5% = 2,500, Performance 5% = 2,500, LTA 5% = 2,500)
+    assert_true(calc_d["standard_allowance"] == 2500.00, "Step 3: Standard Allowance is 5% ($2,500.00)")
+    assert_true(calc_d["performance_bonus"] == 2500.00, "Step 3: Performance Bonus is 5% ($2,500.00)")
+    assert_true(calc_d["lta"] == 2500.00, "Step 3: LTA is 5% ($2,500.00)")
+    # Step 4: Fixed Allowance = 50,000 - (25,000 + 12,500 + 2,500 + 2,500 + 2,500) = 5,000
+    assert_true(calc_d["fixed_allowance"] == 5000.00, "Step 4: Fixed Allowance is Wage minus allocated ($5,000.00)")
+    # Step 5: Deductions: PF (25,000 * 12% = 3,000) and PT (Fixed 200)
+    assert_true(calc_d["pf_employee"] == 3000.00, "Step 5: PF Employee is 12% of Basic ($3,000.00)")
+    assert_true(calc_d["professional_tax"] == 200.00, "Step 5: Professional Tax is fixed $200.00")
+    # Step 6: Net Salary = 50,000 - (3,000 + 200) = 46,800
+    assert_true(calc_d["net_salary"] == 46800.00, "Step 6: Net Salary is Wage minus PF & PT ($46,800.00)")
+
     print("\n==========================================================================")
     print("ALL 8 TASK PROMPTS AND EXACT DATA FIELD DICTIONARY TESTS PASSED 100%!")
     print("==========================================================================\n")

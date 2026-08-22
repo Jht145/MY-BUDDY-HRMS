@@ -39,6 +39,17 @@ def init_db():
             salary_allowances DECIMAL(10, 2) DEFAULT 500.00,
             salary_deductions DECIMAL(10, 2) DEFAULT 250.00,
             net_salary DECIMAL(10, 2) DEFAULT 5250.00,
+            monthly_wage DECIMAL(10, 2) DEFAULT 5000.00,
+            basic_salary DECIMAL(10, 2) DEFAULT 2500.00,
+            hra DECIMAL(10, 2) DEFAULT 1250.00,
+            standard_allowance DECIMAL(10, 2) DEFAULT 250.00,
+            performance_bonus DECIMAL(10, 2) DEFAULT 250.00,
+            lta DECIMAL(10, 2) DEFAULT 250.00,
+            fixed_allowance DECIMAL(10, 2) DEFAULT 500.00,
+            pf_employee DECIMAL(10, 2) DEFAULT 300.00,
+            pf_employer DECIMAL(10, 2) DEFAULT 300.00,
+            professional_tax DECIMAL(10, 2) DEFAULT 200.00,
+            salary_config TEXT DEFAULT NULL,
             leave_balance_paid INTEGER DEFAULT 18,
             leave_balance_sick INTEGER DEFAULT 10,
             is_email_verified INTEGER NOT NULL DEFAULT 0,
@@ -90,6 +101,17 @@ def init_db():
             salary_allowances DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
             salary_deductions DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
             net_salary DECIMAL(10, 2) NOT NULL,
+            monthly_wage DECIMAL(10, 2) DEFAULT 5000.00,
+            basic_salary DECIMAL(10, 2) DEFAULT 2500.00,
+            hra DECIMAL(10, 2) DEFAULT 1250.00,
+            standard_allowance DECIMAL(10, 2) DEFAULT 250.00,
+            performance_bonus DECIMAL(10, 2) DEFAULT 250.00,
+            lta DECIMAL(10, 2) DEFAULT 250.00,
+            fixed_allowance DECIMAL(10, 2) DEFAULT 500.00,
+            pf_employee DECIMAL(10, 2) DEFAULT 300.00,
+            pf_employer DECIMAL(10, 2) DEFAULT 300.00,
+            professional_tax DECIMAL(10, 2) DEFAULT 200.00,
+            salary_config TEXT DEFAULT NULL,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
@@ -122,6 +144,17 @@ def init_db():
         "salary_allowances": "DECIMAL(10, 2) DEFAULT 500.00",
         "salary_deductions": "DECIMAL(10, 2) DEFAULT 250.00",
         "net_salary": "DECIMAL(10, 2) DEFAULT 5250.00",
+        "monthly_wage": "DECIMAL(10, 2) DEFAULT 5000.00",
+        "basic_salary": "DECIMAL(10, 2) DEFAULT 2500.00",
+        "hra": "DECIMAL(10, 2) DEFAULT 1250.00",
+        "standard_allowance": "DECIMAL(10, 2) DEFAULT 250.00",
+        "performance_bonus": "DECIMAL(10, 2) DEFAULT 250.00",
+        "lta": "DECIMAL(10, 2) DEFAULT 250.00",
+        "fixed_allowance": "DECIMAL(10, 2) DEFAULT 500.00",
+        "pf_employee": "DECIMAL(10, 2) DEFAULT 300.00",
+        "pf_employer": "DECIMAL(10, 2) DEFAULT 300.00",
+        "professional_tax": "DECIMAL(10, 2) DEFAULT 200.00",
+        "salary_config": "TEXT DEFAULT NULL",
         "is_email_verified": "INTEGER NOT NULL DEFAULT 0",
         "verification_token": "TEXT",
         "failed_login_attempts": "INTEGER NOT NULL DEFAULT 0",
@@ -132,6 +165,26 @@ def init_db():
     for col, col_type in new_user_cols.items():
         if col not in user_cols:
             cursor.execute(f"ALTER TABLE users ADD COLUMN {col} {col_type}")
+
+    # Payroll column migrations
+    cursor.execute("PRAGMA table_info(payroll)")
+    pay_cols = [row["name"] for row in cursor.fetchall()]
+    new_pay_cols = {
+        "monthly_wage": "DECIMAL(10, 2) DEFAULT 5000.00",
+        "basic_salary": "DECIMAL(10, 2) DEFAULT 2500.00",
+        "hra": "DECIMAL(10, 2) DEFAULT 1250.00",
+        "standard_allowance": "DECIMAL(10, 2) DEFAULT 250.00",
+        "performance_bonus": "DECIMAL(10, 2) DEFAULT 250.00",
+        "lta": "DECIMAL(10, 2) DEFAULT 250.00",
+        "fixed_allowance": "DECIMAL(10, 2) DEFAULT 500.00",
+        "pf_employee": "DECIMAL(10, 2) DEFAULT 300.00",
+        "pf_employer": "DECIMAL(10, 2) DEFAULT 300.00",
+        "professional_tax": "DECIMAL(10, 2) DEFAULT 200.00",
+        "salary_config": "TEXT DEFAULT NULL"
+    }
+    for col, col_type in new_pay_cols.items():
+        if col not in pay_cols:
+            cursor.execute(f"ALTER TABLE payroll ADD COLUMN {col} {col_type}")
 
     # Synchronize is_email_verified from is_verified if present
     if "is_verified" in user_cols:

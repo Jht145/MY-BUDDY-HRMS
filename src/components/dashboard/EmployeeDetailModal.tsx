@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, Mail, Phone, Briefcase, Building2, Calendar, IdCard, Plane } from 'lucide-react';
 import { AttendanceStatus } from '@/types/auth';
 
@@ -52,6 +52,16 @@ const STATUS_LABELS: Record<AttendanceStatus, string> = {
 
 export function EmployeeDetailModal({ employee, onClose }: EmployeeDetailModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
+  
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState<any>({});
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (employee) {
+      setEditData({ ...employee });
+    }
+  }, [employee]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -60,6 +70,30 @@ export function EmployeeDetailModal({ employee, onClose }: EmployeeDetailModalPr
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
   }, [onClose]);
+
+  const handleSave = async () => {
+    if (!employee) return;
+    setIsSaving(true);
+    try {
+      const token = localStorage.getItem('my_buddy_hrms_jwt_v4');
+      const res = await fetch(`http://localhost:8000/api/v1/profile/admin/${employee.user_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({
+          phone: editData.phone,
+          department: editData.department,
+          job_title: editData.job_title
+        })
+      });
+      if (res.ok) {
+        setIsEditing(false);
+        onClose(); // Close to force refresh since state is lifted up
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    setIsSaving(false);
+  };
 
   if (!employee) return null;
 
@@ -109,37 +143,53 @@ export function EmployeeDetailModal({ employee, onClose }: EmployeeDetailModalPr
 
         {/* Details */}
         <div className="p-6 space-y-3">
-          <DetailRow icon={<IdCard className="w-3.5 h-3.5" />} label="Employee ID" value={employee.employee_id} />
-          <DetailRow icon={<Mail className="w-3.5 h-3.5" />} label="Email" value={employee.email} />
-          {employee.phone && <DetailRow icon={<Phone className="w-3.5 h-3.5" />} label="Phone" value={employee.phone} />}
-          {employee.department && <DetailRow icon={<Building2 className="w-3.5 h-3.5" />} label="Department" value={employee.department} />}
-          {employee.job_title && <DetailRow icon={<Briefcase className="w-3.5 h-3.5" />} label="Job Title" value={employee.job_title} />}
-          {employee.joining_date && <DetailRow icon={<Calendar className="w-3.5 h-3.5" />} label="Joining Date" value={employee.joining_date} />}
+          <DetailRow icon={<IdCard className="w-3.5 h-3.5" />} label="Employee ID" value={editData.employee_id || ''} />
+          <DetailRow icon={<Mail className="w-3.5 h-3.5" />} label="Email" value={editData.email || ''} />
+          <DetailRow icon={<Phone className="w-3.5 h-3.5" />} label="Phone" value={editData.phone || ''} isEditing={isEditing} onChange={(v) => setEditData({...editData, phone: v})} />
+          <DetailRow icon={<Building2 className="w-3.5 h-3.5" />} label="Department" value={editData.department || ''} isEditing={isEditing} onChange={(v) => setEditData({...editData, department: v})} />
+          <DetailRow icon={<Briefcase className="w-3.5 h-3.5" />} label="Job Title" value={editData.job_title || ''} isEditing={isEditing} onChange={(v) => setEditData({...editData, job_title: v})} />
+          <DetailRow icon={<Calendar className="w-3.5 h-3.5" />} label="Joining Date" value={editData.joining_date || ''} />
           <DetailRow
             icon={<span className="w-3.5 h-3.5 text-[10px] font-bold flex items-center justify-center">R</span>}
             label="Role"
-            value={employee.role === 'HR_ADMIN' ? 'HR Admin' : 'Employee'}
+            value={editData.role === 'HR_ADMIN' ? 'HR Admin' : 'Employee'}
           />
         </div>
 
-        {/* View-only badge */}
-        <div className="px-6 pb-5">
-          <p className="text-center text-[10px] text-[var(--text-muted)] tracking-wide uppercase">
-            View Only — Non-Editable
-          </p>
+        {/* Action Buttons */}
+        <div className="px-6 pb-5 flex justify-end gap-2">
+          {isEditing ? (
+            <>
+              <button onClick={() => setIsEditing(false)} className="px-4 py-2 text-xs font-semibold text-[var(--text-muted)] hover:bg-[var(--input-bg)] rounded-lg transition-colors">Cancel</button>
+              <button onClick={handleSave} disabled={isSaving} className="px-4 py-2 text-xs font-semibold bg-[var(--brand-teal)] text-white rounded-lg transition-colors shadow-sm">{isSaving ? 'Saving...' : 'Save Changes'}</button>
+            </>
+          ) : (
+            <button onClick={() => setIsEditing(true)} className="w-full py-2.5 text-xs font-semibold bg-[var(--input-bg)] hover:bg-[var(--card-border)] text-[var(--foreground)] rounded-lg transition-colors border border-[var(--card-border)] shadow-sm">
+              Edit Profile
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function DetailRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function DetailRow({ icon, label, value, isEditing, onChange }: { icon: React.ReactNode; label: string; value: string; isEditing?: boolean; onChange?: (val: string) => void }) {
   return (
     <div className="flex items-start gap-2.5">
       <span className="mt-0.5 text-[var(--text-muted)] shrink-0">{icon}</span>
       <div className="min-w-0 flex-1">
         <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] font-semibold">{label}</p>
-        <p className="text-sm text-[var(--foreground)] font-medium truncate">{value}</p>
+        {isEditing && onChange ? (
+          <input 
+            type="text" 
+            value={value} 
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full mt-0.5 h-7 px-2 text-sm bg-[var(--input-bg)] border border-[var(--input-border)] rounded outline-none text-[var(--foreground)] focus:border-[var(--brand-teal)]"
+          />
+        ) : (
+          <p className="text-sm text-[var(--foreground)] font-medium truncate">{value || '-'}</p>
+        )}
       </div>
     </div>
   );

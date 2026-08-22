@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { BrandLogo } from '@/components/common/BrandLogo';
@@ -21,14 +21,22 @@ function getInitials(name: string): string {
   return name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
 }
 
-function FieldRow({ icon, label, value }: { icon: React.ReactNode; label: string; value?: string }) {
-  if (!value) return null;
+function FieldRow({ icon, label, value, isEditing, onChange }: { icon: React.ReactNode; label: string; value?: string; isEditing?: boolean; onChange?: (val: string) => void }) {
   return (
     <div className="flex items-start gap-3 py-3 border-b border-[var(--card-border)] last:border-0">
       <span className="mt-0.5 text-[var(--text-muted)] shrink-0">{icon}</span>
-      <div>
+      <div className="flex-1">
         <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] font-semibold">{label}</p>
-        <p className="text-sm text-[var(--foreground)] font-medium mt-0.5">{value}</p>
+        {isEditing && onChange ? (
+          <input 
+            type="text" 
+            value={value || ''} 
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full mt-0.5 h-8 px-2 text-sm bg-[var(--input-bg)] border border-[var(--input-border)] rounded outline-none text-[var(--foreground)] focus:border-[var(--brand-teal)]"
+          />
+        ) : (
+          <p className="text-sm text-[var(--foreground)] font-medium mt-0.5">{value || '-'}</p>
+        )}
       </div>
     </div>
   );
@@ -37,6 +45,34 @@ function FieldRow({ icon, label, value }: { icon: React.ReactNode; label: string
 export default function ProfilePage() {
   const { user } = useAuth();
   const router = useRouter();
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState<any>({});
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setEditData({ ...user });
+    }
+  }, [user]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const token = localStorage.getItem('my_buddy_hrms_jwt_v4');
+      const res = await fetch(`http://localhost:8000/api/v1/profile/self`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({
+          phone: editData.phone
+        })
+      });
+      if (res.ok) setIsEditing(false);
+    } catch (e) {
+      console.error(e);
+    }
+    setIsSaving(false);
+  };
 
   if (!user) {
     return null;
@@ -89,20 +125,27 @@ export default function ProfilePage() {
 
             {/* Fields */}
             <div className="px-6 py-2">
-              <FieldRow icon={<IdCard className="w-3.5 h-3.5" />} label="Employee ID" value={user.employee_id} />
-              <FieldRow icon={<Mail className="w-3.5 h-3.5" />} label="Email Address" value={user.email} />
-              <FieldRow icon={<Phone className="w-3.5 h-3.5" />} label="Phone" value={user.phone} />
-              <FieldRow icon={<Building2 className="w-3.5 h-3.5" />} label="Department" value={user.department} />
-              <FieldRow icon={<Briefcase className="w-3.5 h-3.5" />} label="Job Title" value={user.job_title} />
-              <FieldRow icon={<Calendar className="w-3.5 h-3.5" />} label="Joining Date" value={user.joining_date} />
-              <FieldRow icon={<User className="w-3.5 h-3.5" />} label="Company" value={user.company_name} />
+              <FieldRow icon={<IdCard className="w-3.5 h-3.5" />} label="Employee ID" value={editData.employee_id} />
+              <FieldRow icon={<Mail className="w-3.5 h-3.5" />} label="Email Address" value={editData.email} />
+              <FieldRow icon={<Phone className="w-3.5 h-3.5" />} label="Phone" value={editData.phone} isEditing={isEditing} onChange={(v) => setEditData({...editData, phone: v})} />
+              <FieldRow icon={<Building2 className="w-3.5 h-3.5" />} label="Department" value={editData.department} />
+              <FieldRow icon={<Briefcase className="w-3.5 h-3.5" />} label="Job Title" value={editData.job_title} />
+              <FieldRow icon={<Calendar className="w-3.5 h-3.5" />} label="Joining Date" value={editData.joining_date} />
+              <FieldRow icon={<User className="w-3.5 h-3.5" />} label="Company" value={editData.company_name} />
             </div>
 
-            {/* Footer badge */}
-            <div className="px-6 pb-5 pt-2">
-              <p className="text-center text-[10px] text-[var(--text-muted)] tracking-wide uppercase">
-                View Only — Profile
-              </p>
+            {/* Action Buttons */}
+            <div className="px-6 pb-6 pt-2 flex justify-end gap-2">
+              {isEditing ? (
+                <>
+                  <button onClick={() => setIsEditing(false)} className="px-4 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--input-bg)] rounded-lg transition-colors">Cancel</button>
+                  <button onClick={handleSave} disabled={isSaving} className="px-4 py-2 text-sm bg-[var(--brand-teal)] text-white rounded-lg transition-colors shadow-sm">{isSaving ? 'Saving...' : 'Save Profile'}</button>
+                </>
+              ) : (
+                <button onClick={() => setIsEditing(true)} className="w-full py-2.5 text-sm bg-[var(--input-bg)] hover:bg-[var(--card-border)] text-[var(--foreground)] rounded-lg transition-colors border border-[var(--card-border)] shadow-sm font-medium">
+                  Edit Profile
+                </button>
+              )}
             </div>
           </div>
         </div>

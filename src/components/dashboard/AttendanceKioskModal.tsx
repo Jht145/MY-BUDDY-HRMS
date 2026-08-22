@@ -117,83 +117,70 @@ export function AttendanceKioskModal({ isOpen, onClose, mode, onSuccess }: Atten
       });
   };
 
-  const handleConfirmAction = () => {
+  const handleConfirmAction = async () => {
     if (!user) return;
     
     const isCheckIn = mode === 'checkin';
+    const endpoint = isCheckIn ? '/api/v1/attendance/kiosk/check-in' : '/api/v1/attendance/kiosk/check-out';
     const actionLabel = isCheckIn ? 'Check-in' : 'Check-out';
-    const statusNote = isCheckIn ? 'Outside Office Radius (Check-In)' : 'Outside Office Radius (Check-Out)';
     
-    if (isWithinGeofence) {
-      setFeedback({
-        status: 'SUCCESS',
-        message: `Location Verified. ${actionLabel} Auto-Approved!`
+    try {
+      const token = localStorage.getItem('my_buddy_hrms_jwt_v4');
+      const response = await fetch(`http://localhost:8000${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          check_in_latitude: isWithinGeofence ? 12.9716 : (latitude || 13.0),
+          check_in_longitude: isWithinGeofence ? 77.5946 : (longitude || 78.0),
+          check_in_photo_url: photoCaptured || 'https://via.placeholder.com/150'
+        })
       });
+      const data = await response.json();
       
+      if (!response.ok) throw new Error(data.message || 'Error recording attendance');
+
+      const isApproved = data.data.approval_status === 'AUTO_APPROVED';
+      
+      if (isApproved) {
+        setFeedback({
+          status: 'SUCCESS',
+          message: `Location Verified. ${actionLabel} Auto-Approved!`
+        });
+      } else {
+        setFeedback({
+          status: 'WARNING',
+          message: `Outside Office Radius. Submitted ${actionLabel} for Admin Approval.`
+        });
+      }
+
+      // Update UI state
       const CHECKIN_KEY = `my_buddy_hrms_checkin_${user.user_id}`;
       if (isCheckIn) {
-        // Save check-in record
         const newRecord = { timestamp: Date.now(), date: new Date().toISOString().slice(0, 10) };
         localStorage.setItem(CHECKIN_KEY, JSON.stringify(newRecord));
       } else {
-        // Save check-out (remove active check-in key, save into history)
-        const activeRaw = localStorage.getItem(CHECKIN_KEY);
-        let checkInTimestamp = Date.now() - 8 * 3600000; // fallback 8 hours ago
-        if (activeRaw) {
-          try {
-            checkInTimestamp = JSON.parse(activeRaw).timestamp;
-          } catch { /* ignore */ }
-        }
-        
-        const HISTORY_KEY = `my_buddy_hrms_attendance_history_${user.user_id}`;
-        const historyRaw = localStorage.getItem(HISTORY_KEY);
-        const history = historyRaw ? JSON.parse(historyRaw) : [];
-        const newLog = {
-          date: new Date().toISOString().slice(0, 10),
-          checkIn: checkInTimestamp,
-          checkOut: Date.now()
-        };
-        
-        localStorage.setItem(HISTORY_KEY, JSON.stringify([newLog, ...history]));
         localStorage.removeItem(CHECKIN_KEY);
       }
-    } else {
+
+      setTimeout(() => {
+        onSuccess?.();
+        onClose();
+        setFeedback({ status: null, message: '' });
+        setPhotoCaptured(null);
+      }, 2500);
+
+    } catch (error: any) {
       setFeedback({
         status: 'WARNING',
-        message: `Outside Office Radius. Submitted ${actionLabel} for Admin Approval.`
+        message: error.message || 'Failed to record attendance'
       });
-      
-      // If outside geofence, save to flagged check-ins in localStorage
-      const flaggedRecord = {
-        name: user.name || `${user.first_name} ${user.last_name}`.trim(),
-        empId: user.employee_id,
-        department: user.department || 'Product Engineering',
-        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-        note: statusNote,
-        coordinates: `${latitude?.toFixed(6)}, ${longitude?.toFixed(6)}`,
-        photo: photoCaptured,
-      };
-      
-      const existingRaw = localStorage.getItem('my_buddy_hrms_flagged_checkins');
-      const existing = existingRaw ? JSON.parse(existingRaw) : [];
-      localStorage.setItem('my_buddy_hrms_flagged_checkins', JSON.stringify([flaggedRecord, ...existing]));
-
-      // Still update local storage state for checking in/out so the UI updates
-      const CHECKIN_KEY = `my_buddy_hrms_checkin_${user.user_id}`;
-      if (isCheckIn) {
-        const newRecord = { timestamp: Date.now(), date: new Date().toISOString().slice(0, 10) };
-        localStorage.setItem(CHECKIN_KEY, JSON.stringify(newRecord));
-      } else {
-        localStorage.removeItem(CHECKIN_KEY);
-      }
+      setTimeout(() => {
+        setFeedback({ status: null, message: '' });
+      }, 3000);
     }
-
-    setTimeout(() => {
-      onSuccess?.();
-      onClose();
-      setFeedback({ status: null, message: '' });
-      setPhotoCaptured(null);
-    }, 2500);
   };
 
   if (!isOpen) return null;

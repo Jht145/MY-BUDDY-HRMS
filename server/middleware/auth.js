@@ -1,9 +1,14 @@
 const jwt = require('jsonwebtoken');
+const db = require('../db');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'mybuddy_hrms_super_secret_jwt_key_2026_secure';
+const INACTIVITY_TIMEOUT_SECONDS = 120; // 2 minutes
+const MAX_LOGIN_ATTEMPTS = 3;
+const LOCKOUT_MINUTES = 15;
 
 /**
  * Middleware to verify JWT token from Authorization header (Bearer <token>)
+ * and enforce 2-minute server-side inactivity session expiration.
  */
 function verifyToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -27,6 +32,40 @@ function verifyToken(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded.user_id || !decoded.role) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid token payload structure.'
+      });
+    }
+
+    // Check server-side 2-minute inactivity against database
+    const user = db.prepare('SELECT id, last_activity, role, is_email_verified FROM users WHERE id = ?').get(decoded.user_id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'User session no longer exists.'
+      });
+    }
+
+    if (user.last_activity) {
+      const lastAct = new Date(user.last_activity).getTime();
+      const now = new Date().getTime();
+      const elapsedSeconds = (now - lastAct) / 1000;
+
+      if (elapsedSeconds > INACTIVITY_TIMEOUT_SECONDS) {
+        return res.status(401).json({
+          success: false,
+          inactivity_logout: true,
+          message: 'Session expired due to 2 minutes of inactivity. Please log in again.'
+        });
+      }
+    }
+
+    // Update last_activity to current UTC timestamp
+    const nowIso = new Date().toISOString();
+    db.prepare('UPDATE users SET last_activity = ? WHERE id = ?').run(nowIso, user.id);
+
     req.user = decoded;
     next();
   } catch (error) {
@@ -74,5 +113,8 @@ function requireRole(allowedRoles) {
 module.exports = {
   verifyToken,
   requireRole,
-  JWT_SECRET
+  JWT_SECRET,
+  INACTIVITY_TIMEOUT_SECONDS,
+  MAX_LOGIN_ATTEMPTS,
+  LOCKOUT_MINUTES
 };

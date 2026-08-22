@@ -48,71 +48,41 @@ export function AttendanceTab() {
   const [selectedDayRecord, setSelectedDayRecord] = useState<AttendanceRecord | null>(null);
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
 
-  // Load and merge history/mock records
+  const [approvedLeaves, setApprovedLeaves] = useState<any[]>([]);
+
+  // Fetch real attendance history
   useEffect(() => {
-    if (!user) return;
-
-    const historyRaw = localStorage.getItem(HISTORY_KEY(user.user_id));
-    const history: AttendanceRecord[] = historyRaw ? JSON.parse(historyRaw) : [];
-
-    const todayRaw = localStorage.getItem(CHECKIN_KEY(user.user_id));
-    const today = new Date().toISOString().slice(0, 10);
-    let todayRecord: AttendanceRecord | null = null;
-    if (todayRaw) {
+    async function loadLogs() {
+      if (!user) return;
       try {
-        const parsed = JSON.parse(todayRaw);
-        if (parsed.date === today) {
-          todayRecord = { date: today, checkIn: parsed.timestamp, checkOut: null };
-        }
-      } catch { /* ignore */ }
-    }
-
-    const all = todayRecord
-      ? [todayRecord, ...history.filter((r) => r.date !== today)]
-      : history;
-
-    if (all.length === 0) {
-      const mockRecords: AttendanceRecord[] = [];
-      const now = new Date();
-      for (let i = 0; i < 45; i++) {
-        const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-        if (d.getDay() === 0) continue;
-
-        const dateStr = d.toISOString().slice(0, 10);
+        const token = localStorage.getItem('my_buddy_hrms_jwt_v4');
+        const res = await fetch('http://localhost:8000/api/v1/attendance/my-logs', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
         
-        const hasLeave = INITIAL_LEAVES.some(
-          (l) => l.userId === user.user_id &&
-          l.status === 'APPROVED' &&
-          dateStr >= l.startDate &&
-          dateStr <= l.endDate
-        );
-
-        if (hasLeave) continue;
-
-        const isPresent = Math.random() > 0.15;
-        if (isPresent) {
-          const checkInHour = 9 + (Math.random() > 0.7 ? 1 : 0);
-          const checkInMin = Math.floor(Math.random() * 30);
-          const checkInTime = new Date(d.getFullYear(), d.getMonth(), d.getDate(), checkInHour, checkInMin, 0).getTime();
-          const checkOutTime = checkInTime + (8 + Math.random()) * 3600000;
-          
-          mockRecords.push({
-            date: dateStr,
-            checkIn: checkInTime,
-            checkOut: checkOutTime,
-          });
-        } else {
-          mockRecords.push({
-            date: dateStr,
-            checkIn: null,
-            checkOut: null,
-          });
+        if (data.success && data.logs) {
+          const fetchedRecords = data.logs.map((log: any) => ({
+            date: log.attendance_date,
+            checkIn: log.check_in_time ? new Date(log.check_in_time).getTime() : null,
+            checkOut: log.check_out_time ? new Date(log.check_out_time).getTime() : null,
+          }));
+          setRecords(fetchedRecords);
         }
+
+        const leavesRes = await fetch('http://localhost:8000/api/v1/leaves/my-requests', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const leavesData = await leavesRes.json();
+        if (leavesData.success) {
+          setApprovedLeaves(leavesData.leave_requests.filter((l: any) => l.leave_status === 'APPROVED'));
+        }
+
+      } catch (e) {
+        console.error("Failed to load attendance logs", e);
       }
-      setRecords(mockRecords);
-    } else {
-      setRecords(all);
     }
+    loadLogs();
   }, [user]);
 
   const year = currentDate.getFullYear();
@@ -149,13 +119,12 @@ export function AttendanceTab() {
     const dateStr = date.toISOString().slice(0, 10);
     const todayStr = new Date().toISOString().slice(0, 10);
     
-    const leave = INITIAL_LEAVES.find(
-      (l) => l.userId === user?.user_id &&
-      l.status === 'APPROVED' &&
-      dateStr >= l.startDate &&
-      dateStr <= l.endDate
+    const leave = approvedLeaves.find(
+      (l) => 
+      dateStr >= l.start_date &&
+      dateStr <= l.end_date
     );
-    if (leave) return { type: 'LEAVE', record: null, leave };
+    if (leave) return { type: 'LEAVE', record: null, leave: { reason: leave.leave_reason } };
 
     const rec = records.find((r) => r.date === dateStr);
     if (rec) {

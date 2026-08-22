@@ -56,6 +56,25 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
 
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   
+  const handleVerifyCheckin = async (action: 'approve' | 'reject') => {
+    if (!selectedFlagged) return;
+    try {
+      const token = localStorage.getItem('my_buddy_hrms_jwt_v4') || localStorage.getItem('hrms_token');
+      await fetch(`http://localhost:8000/api/v1/attendance/admin/verify/${selectedFlagged.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ action: action.toUpperCase(), admin_comment: `Admin ${action}` })
+      });
+      const uniqueKey = `${selectedFlagged.name}-${flaggedLogs.findIndex(f => f.id === selectedFlagged.id)}`;
+      if (action === 'approve') {
+        setReviewedCheckins((prev) => [...prev, uniqueKey]);
+      } else {
+        setRejectedCheckins((prev) => [...prev, uniqueKey]);
+      }
+      setSelectedFlagged(null);
+    } catch (e) {}
+  };
+
   const fetchAdminData = async () => {
     if (!user || user.role !== 'HR_ADMIN') return;
 
@@ -104,7 +123,7 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
         const fetchedFlagged = flaggedData.flagged_logs.map((f: any) => ({
           id: String(f.attendance_id),
           name: f.employee_name || 'Employee',
-          time: new Date(f.check_in_time).toLocaleTimeString(),
+          time: f.check_in_time,
           note: f.admin_comment || 'Outside Geofence',
           coordinates: `${f.check_in_latitude}, ${f.check_in_longitude}`,
           empId: f.employee_id || 'N/A',
@@ -359,21 +378,13 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
 
                   <div className="flex gap-2 mt-6">
                     <button
-                      onClick={() => {
-                        const uniqueKey = flaggedLogs.findIndex(f => f.name === selectedFlagged.name);
-                        setReviewedCheckins((prev) => [...prev, `${selectedFlagged.name}-${uniqueKey !== -1 ? uniqueKey : 0}`]);
-                        setSelectedFlagged(null);
-                      }}
+                      onClick={() => handleVerifyCheckin('approve')}
                       className="flex-1 h-9 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs uppercase flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <Check className="w-3.5 h-3.5" /> Approve
                     </button>
                     <button
-                      onClick={() => {
-                        const uniqueKey = flaggedLogs.findIndex(f => f.name === selectedFlagged.name);
-                        setRejectedCheckins((prev) => [...prev, `${selectedFlagged.name}-${uniqueKey !== -1 ? uniqueKey : 0}`]);
-                        setSelectedFlagged(null);
-                      }}
+                      onClick={() => handleVerifyCheckin('reject')}
                       className="flex-1 h-9 rounded-lg bg-red-500 hover:bg-red-600 text-white font-bold text-xs uppercase flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <Ban className="w-3.5 h-3.5" /> Reject

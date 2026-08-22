@@ -12,6 +12,7 @@ interface MainDashboardTabProps {
 }
 
 interface FlaggedCheckin {
+  id?: string;
   name: string;
   time: string;
   note: string;
@@ -59,12 +60,14 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
   const handleVerifyCheckin = async (action: 'approve' | 'reject') => {
     if (!selectedFlagged) return;
     try {
-      const token = localStorage.getItem('my_buddy_hrms_jwt_v4') || localStorage.getItem('hrms_token');
-      await fetch(`/api/v1/attendance/admin/verify/${selectedFlagged.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ action: action.toUpperCase(), admin_comment: `Admin ${action}` })
-      });
+      if (selectedFlagged.id) {
+        const token = localStorage.getItem('my_buddy_hrms_jwt_v4') || localStorage.getItem('hrms_token');
+        await fetch(`/api/v1/attendance/admin/verify/${selectedFlagged.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ action: action.toUpperCase(), admin_comment: `Admin ${action}` })
+        });
+      }
       const uniqueKey = `${selectedFlagged.name}-${flaggedLogs.indexOf(selectedFlagged)}`;
       if (action === 'approve') {
         setReviewedCheckins((prev) => [...prev, uniqueKey]);

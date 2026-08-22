@@ -1,4 +1,5 @@
 export type UserRole = 'EMPLOYEE' | 'HR_ADMIN';
+export type AttendanceStatus = 'PRESENT' | 'ON_LEAVE' | 'ABSENT';
 
 export interface User {
   user_id: string;
@@ -15,6 +16,7 @@ export interface User {
   job_title?: string;
   joining_date?: string;
   avatar_url?: string;
+  attendance_status?: AttendanceStatus;
 }
 
 export interface StoredUser extends User {

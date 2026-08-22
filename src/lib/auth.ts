@@ -147,6 +147,6 @@ export async function registerUser(credentials: SignUpCredentials): Promise<{ us
   return { user: safeUser, token };
 }
 
-export function getRedirectPathForRole(role: UserRole): string {
-  return role === 'HR_ADMIN' ? '/admin/dashboard' : '/dashboard';
+export function getRedirectPathForRole(_role: UserRole): string {
+  return '/dashboard';
 }

@@ -1,0 +1,284 @@
+MY BUDDY HRMS — Next.js Frontend Starter
+=========================================
+
+This starter follows the project README: My Buddy HRMS with employee and HR Admin experiences, kiosk attendance UI, leave, payroll, profile, responsive navigation, and light/dark mode.
+
+1. CREATE THE PROJECT
+---------------------
+Run these commands in your terminal:
+
+npx create-next-app@latest my-buddy-hrms --ts --tailwind --eslint --app --src-dir --import-alias "@/*"
+cd my-buddy-hrms
+npm install lucide-react
+
+Replace the generated files with the files below.
+
+2. FILE: src/app/globals.css
+----------------------------
+@import "tailwindcss";
+
+:root {
+  --background: #f6faf9;
+  --foreground: #102a43;
+  --card: #ffffff;
+  --muted: #61758c;
+  --border: #d8e5e3;
+  --navy: #0b1f3a;
+  --teal: #14b8a6;
+  --blue: #1d4ed8;
+  --danger: #dc2626;
+}
+
+[data-theme="dark"] {
+  --background: #0d1520;
+  --foreground: #eef7f6;
+  --card: #142331;
+  --muted: #a9bdc8;
+  --border: #294255;
+  --navy: #eaf8f6;
+  --teal: #2dd4bf;
+  --blue: #60a5fa;
+  --danger: #fca5a5;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+}
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+
+3. FILE: src/app/layout.tsx
+---------------------------
+import type { Metadata } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "MY BUDDY | HRMS",
+  description: "Employee operations and verified attendance platform"
+};
+
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body>{children}</body>
+    </html>
+  );
+}
+
+4. FILE: src/app/page.tsx
+-------------------------
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import {
+  Activity, Bell, BriefcaseBusiness, Building2, CalendarDays, Camera,
+  CheckCircle2, ChevronRight, ClipboardCheck, CreditCard, FileText,
+  LayoutDashboard, LogIn, LogOut, MapPin, Menu, Moon, ScanFace,
+  Settings, ShieldCheck, Sun, Users, Wallet, X
+} from "lucide-react";
+
+type Role = "EMPLOYEE" | "HR_ADMIN";
+type Page = "home" | "signin" | "signup" | "employee" | "admin" | "kiosk" | "leave" | "payroll" | "profile" | "directory";
+
+type AuthUser = {
+  name: string;
+  employeeId: string;
+  email: string;
+  role: Role;
+  company: string;
+};
+
+const navItems = [
+  ["employee", "Employee dashboard", LayoutDashboard],
+  ["kiosk", "Smart kiosk", Camera],
+  ["leave", "Leave requests", CalendarDays],
+  ["payroll", "Payroll & payslips", Wallet],
+  ["profile", "My profile", Settings],
+  ["directory", "Employee directory", Users]
+] as const;
+
+export default function MyBuddyHRMS() {
+  const [page, setPage] = useState<Page>("home");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
+  function authenticate(role: Role, details?: Partial<AuthUser>) {
+    const loggedInUser: AuthUser = {
+      name: details?.name || (role === "HR_ADMIN" ? "Aarav Sharma" : "Priya Nair"),
+      employeeId: details?.employeeId || (role === "HR_ADMIN" ? "HR-1001" : "EMP-1042"),
+      email: details?.email || (role === "HR_ADMIN" ? "hr@mybuddy.demo" : "priya@mybuddy.demo"),
+      role,
+      company: details?.company || "My Buddy Technologies"
+    };
+    setUser(loggedInUser);
+    setPage(role === "HR_ADMIN" ? "admin" : "employee");
+  }
+
+  function logout() {
+    setUser(null);
+    setPage("home");
+    setMenuOpen(false);
+  }
+
+  const dashboardTitle = useMemo(() => user?.role === "HR_ADMIN" ? "HR Admin workspace" : "Employee workspace", [user]);
+
+  if (page === "signin") return <AuthScreen mode="signin" go={setPage} onAuth={authenticate} theme={theme} toggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")} />;
+  if (page === "signup") return <AuthScreen mode="signup" go={setPage} onAuth={authenticate} theme={theme} toggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")} />;
+
+  if (user && page !== "home") {
+    return (
+      <div className="min-h-screen bg-[var(--background)]">
+        <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--card)]/95 backdrop-blur">
+          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+            <button onClick={() => setPage(user.role === "HR_ADMIN" ? "admin" : "employee")} className="flex items-center gap-3 text-left">
+              <Brand />
+            </button>
+            <div className="flex items-center gap-2">
+              <button aria-label="Toggle theme" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} className="rounded-xl border border-[var(--border)] p-2 text-[var(--foreground)] hover:bg-[var(--background)]">
+                {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+              <button onClick={() => setMenuOpen(!menuOpen)} className="rounded-xl border border-[var(--border)] p-2 md:hidden"><Menu size={20} /></button>
+              <div className="hidden items-center gap-3 md:flex">
+                <button className="rounded-xl p-2 hover:bg-[var(--background)]"><Bell size={19} /></button>
+                <div className="text-right text-sm"><p className="font-bold">{user.name}</p><p className="text-[var(--muted)]">{user.role === "HR_ADMIN" ? "HR Admin" : "Employee"}</p></div>
+                <div className="grid h-10 w-10 place-items-center rounded-full bg-teal-500 font-black text-slate-950">{user.name.slice(0, 1)}</div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="mx-auto flex max-w-7xl">
+          <aside className={`${menuOpen ? "block" : "hidden"} fixed inset-x-0 top-16 z-20 border-b border-[var(--border)] bg-[var(--card)] p-4 shadow-lg md:static md:block md:min-h-[calc(100vh-64px)] md:w-64 md:border-b-0 md:border-r md:p-5 md:shadow-none`}>
+            <p className="mb-4 px-3 text-xs font-bold uppercase tracking-[0.16em] text-[var(--muted)]">{dashboardTitle}</p>
+            <nav className="space-y-1">
+              {navItems.filter(([key]) => user.role === "EMPLOYEE" || key === "directory").map(([key, label, Icon]) => (
+                <button key={key} onClick={() => { setPage(key as Page); setMenuOpen(false); }} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${page === key ? "bg-teal-500 text-slate-950" : "text-[var(--foreground)] hover:bg-[var(--background)]"}`}>
+                  <Icon size={19} /> {label}
+                </button>
+              ))}
+              {user.role === "HR_ADMIN" && (
+                <button onClick={() => { setPage("admin"); setMenuOpen(false); }} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold ${page === "admin" ? "bg-teal-500 text-slate-950" : "hover:bg-[var(--background)]"}`}><ShieldCheck size={19} /> Admin dashboard</button>
+              )}
+            </nav>
+            <button onClick={logout} className="mt-8 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-red-500 hover:bg-red-500/10"><LogOut size={19} /> Sign out</button>
+          </aside>
+
+          <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
+            {page === "employee" && <EmployeeDashboard user={user} go={setPage} />}
+            {page === "admin" && <AdminDashboard user={user} go={setPage} />}
+            {page === "kiosk" && <Kiosk />}
+            {page === "leave" && <LeavePage />}
+            {page === "payroll" && <PayrollPage user={user} />}
+            {page === "profile" && <ProfilePage user={user} />}
+            {page === "directory" && <DirectoryPage isAdmin={user.role === "HR_ADMIN"} />}
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  return <Landing go={setPage} theme={theme} toggleTheme={() => setTheme(theme === "dark" ? "light" : "dark")} />;
+}
+
+function Brand() {
+  return <><div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-teal-400 to-blue-600 font-black text-slate-950">MB</div><div><p className="text-lg font-black tracking-tight text-[var(--navy)]">MY BUDDY</p><p className="-mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--muted)]">Human resource system</p></div></>;
+}
+
+function Landing({ go, theme, toggleTheme }: { go: (page: Page) => void; theme: string; toggleTheme: () => void }) {
+  return (
+    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+      <header className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6">
+        <Brand />
+        <div className="flex items-center gap-3"><button onClick={toggleTheme} className="rounded-xl border border-[var(--border)] p-2">{theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}</button><button onClick={() => go("signin")} className="rounded-xl px-4 py-2 font-bold hover:bg-[var(--card)]">Sign in</button><button onClick={() => go("signup")} className="rounded-xl bg-teal-500 px-4 py-2 font-bold text-slate-950">Get started</button></div>
+      </header>
+      <main>
+        <section className="mx-auto grid max-w-7xl gap-12 px-4 py-14 sm:px-6 lg:grid-cols-2 lg:py-24">
+          <div className="flex flex-col justify-center">
+            <span className="mb-5 w-fit rounded-full border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-sm font-bold text-teal-600">Verified attendance. Better people operations.</span>
+            <h1 className="max-w-3xl text-4xl font-black leading-tight tracking-tight text-[var(--navy)] sm:text-6xl">Your people deserve a smarter <span className="text-teal-500">HR buddy.</span></h1>
+            <p className="mt-6 max-w-xl text-lg leading-8 text-[var(--muted)]">MY BUDDY brings attendance, leave, payroll, profiles, and HR approvals into one secure, role-based workspace.</p>
+            <div className="mt-8 flex flex-wrap gap-3"><button onClick={() => go("signup")} className="inline-flex items-center gap-2 rounded-xl bg-teal-500 px-5 py-3 font-black text-slate-950">Create account <ChevronRight size={18} /></button><button onClick={() => go("signin")} className="rounded-xl border border-[var(--border)] bg-[var(--card)] px-5 py-3 font-bold">Explore dashboard</button></div>
+            <div className="mt-10 grid grid-cols-3 gap-4"><MiniStat value="100m" label="geofence radius" /><MiniStat value="24/7" label="HR visibility" /><MiniStat value="RBAC" label="protected access" /></div>
+          </div>
+          <div className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-2xl shadow-teal-900/10">
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-4"><div><p className="font-black">Attendance overview</p><p className="text-sm text-[var(--muted)]">Today, August 22</p></div><span className="rounded-full bg-emerald-500/15 px-3 py-1 text-sm font-bold text-emerald-600">Live</span></div>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2"><Metric title="Present today" value="86%" icon={<CheckCircle2 className="text-emerald-500" />} /><Metric title="Flagged check-ins" value="04" icon={<MapPin className="text-orange-500" />} /><Metric title="Leave requests" value="12" icon={<CalendarDays className="text-blue-500" />} /><Metric title="Payroll status" value="Ready" icon={<Wallet className="text-teal-500" />} /></div>
+            <div className="mt-5 rounded-2xl bg-[var(--background)] p-4"><div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-xl bg-teal-500/15 text-teal-600"><ScanFace /></div><div><p className="font-bold">Smart kiosk verification</p><p className="text-sm text-[var(--muted)]">Photo + GPS check-in ready</p></div></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-[var(--border)]"><div className="h-full w-[86%] rounded-full bg-teal-500" /></div></div>
+          </div>
+        </section>
+        <section className="border-y border-[var(--border)] bg-[var(--card)]"><div className="mx-auto max-w-7xl px-4 py-16 sm:px-6"><div className="max-w-2xl"><p className="font-bold text-teal-600">CORE MODULES</p><h2 className="mt-2 text-3xl font-black text-[var(--navy)]">Everything your HR operation needs.</h2></div><div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3"><Feature icon={<Camera />} title="Smart kiosk attendance" text="Photo capture, GPS coordinates, geofence checks, and admin review for exceptions." /><Feature icon={<Users />} title="Employee profiles" text="Role-aware self-service profile updates and a searchable employee directory." /><Feature icon={<CalendarDays />} title="Leave workflows" text="Apply, review, approve, reject, and track leave balances from one queue." /><Feature icon={<CreditCard />} title="Payroll control" text="Payslips, compensation data, deductions, and payroll status in one place." /><Feature icon={<ShieldCheck />} title="RBAC security" text="Employee and HR Admin access with protected routes and token-based sessions." /><Feature icon={<Activity />} title="Live HR insights" text="Attendance ratios, leave queues, alerts, and workforce metrics at a glance." /></div></div></section>
+      </main>
+    </div>
+  );
+}
+
+function MiniStat({ value, label }: { value: string; label: string }) { return <div><p className="text-xl font-black text-[var(--navy)]">{value}</p><p className="text-xs text-[var(--muted)]">{label}</p></div>; }
+function Feature({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) { return <article className="rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5"><div className="w-fit rounded-xl bg-teal-500/15 p-3 text-teal-600">{icon}</div><h3 className="mt-4 font-black text-[var(--navy)]">{title}</h3><p className="mt-2 text-sm leading-6 text-[var(--muted)]">{text}</p></article>; }
+function Metric({ title, value, icon }: { title: string; value: string; icon: React.ReactNode }) { return <div className="rounded-2xl border border-[var(--border)] p-4"><div className="flex items-center justify-between">{icon}<span className="text-xs text-[var(--muted)]">Today</span></div><p className="mt-5 text-2xl font-black text-[var(--navy)]">{value}</p><p className="text-sm text-[var(--muted)]">{title}</p></div>; }
+
+function AuthScreen({ mode, go, onAuth, theme, toggleTheme }: { mode: "signin" | "signup"; go: (page: Page) => void; onAuth: (role: Role, details?: Partial<AuthUser>) => void; theme: string; toggleTheme: () => void }) {
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const isSignUp = mode === "signup";
+
+  function submit(formData: FormData) {
+    setError("");
+    const email = String(formData.get("email") || "").trim();
+    const password = String(formData.get("password") || "");
+    if (!/^\S+@\S+\.\S+$/.test(email)) return setError("Enter a valid work email address.");
+    if (password.length < 8) return setError("Password must be at least 8 characters.");
+    if (isSignUp && password !== String(formData.get("confirmPassword") || "")) return setError("Passwords do not match.");
+    if (isSignUp && !String(formData.get("employeeId") || "").trim()) return setError("Employee ID is required.");
+    setLoading(true);
+    setTimeout(() => {
+      const role = (formData.get("role") || "EMPLOYEE") as Role;
+      onAuth(role, { name: String(formData.get("name") || "Priya Nair"), employeeId: String(formData.get("employeeId") || "EMP-1042"), email, company: String(formData.get("company") || "My Buddy Technologies") });
+      setLoading(false);
+    }, 650);
+  }
+
+  return <div className="min-h-screen bg-[var(--background)] p-4 sm:p-8"><header className="mx-auto flex max-w-5xl items-center justify-between"><button onClick={() => go("home")}><Brand /></button><button onClick={toggleTheme} className="rounded-xl border border-[var(--border)] p-2">{theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}</button></header><div className="mx-auto mt-10 grid max-w-5xl overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--card)] shadow-2xl shadow-teal-950/10 lg:grid-cols-[0.9fr_1.1fr]"><div className="hidden bg-gradient-to-br from-[#0b1f3a] via-[#135c83] to-teal-500 p-10 text-white lg:block"><ShieldCheck size={42} /><h1 className="mt-10 text-4xl font-black">Work smarter. Feel supported.</h1><p className="mt-4 leading-7 text-white/80">Secure HR operations, verified attendance, leave management, and payroll in one workspace.</p><div className="mt-12 space-y-4 text-sm font-semibold"><p>✓ Role-based employee & HR access</p><p>✓ GPS + photo kiosk attendance</p><p>✓ Protected operational workflows</p></div></div><div className="p-6 sm:p-10"><p className="text-sm font-bold text-teal-600">MY BUDDY HRMS</p><h2 className="mt-2 text-3xl font-black text-[var(--navy)]">{isSignUp ? "Create your account" : "Welcome back"}</h2><p className="mt-2 text-[var(--muted)]">{isSignUp ? "Set up your secure workplace account." : "Sign in to access your HR workspace."}</p>{error && <div className="mt-5 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm font-semibold text-red-500">{error}</div>}<form action={(formData) => submit(formData)} className="mt-7 space-y-4">
+    {isSignUp && <><Field label="Company name" name="company" placeholder="My Buddy Technologies" required /><div className="grid gap-4 sm:grid-cols-2"><Field label="Full name" name="name" placeholder="Your full name" required /><Field label="Employee ID" name="employeeId" placeholder="EMP-1042" required /></div><Field label="Role" name="role" select options={["EMPLOYEE", "HR_ADMIN"]} /></>}
+    <Field label="Work email" name="email" type="email" placeholder="you@company.com" required />
+    <div><label className="mb-2 block text-sm font-bold">Password</label><div className="relative"><input name="password" type={showPassword ? "text" : "password"} placeholder="Minimum 8 characters" required className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 pr-14 outline-none focus:border-teal-500" /><button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs font-bold text-[var(--muted)]">{showPassword ? "HIDE" : "SHOW"}</button></div></div>
+    {isSignUp && <Field label="Confirm password" name="confirmPassword" type="password" placeholder="Re-enter password" required />}
+    <button disabled={loading} className="w-full rounded-xl bg-teal-500 px-4 py-3 font-black text-slate-950 disabled:opacity-60">{loading ? "PLEASE WAIT…" : isSignUp ? "CREATE ACCOUNT" : "SIGN IN"}</button>
+  </form><p className="mt-6 text-center text-sm text-[var(--muted)]">{isSignUp ? "Already have an account? " : "New to MY BUDDY? "}<button onClick={() => go(isSignUp ? "signin" : "signup")} className="font-black text-teal-600">{isSignUp ? "Sign in" : "Create account"}</button></p><button onClick={() => onAuth("EMPLOYEE")} className="mt-6 w-full text-center text-xs font-bold text-[var(--muted)] underline">Demo: Continue as employee</button><button onClick={() => onAuth("HR_ADMIN")} className="mt-2 w-full text-center text-xs font-bold text-[var(--muted)] underline">Demo: Continue as HR Admin</button></div></div></div>;
+}
+
+function Field({ label, name, type = "text", placeholder, required, select, options }: { label: string; name: string; type?: string; placeholder?: string; required?: boolean; select?: boolean; options?: string[] }) { return <div><label className="mb-2 block text-sm font-bold">{label}</label>{select ? <select name={name} className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 outline-none focus:border-teal-500">{options?.map((option) => <option key={option} value={option}>{option === "HR_ADMIN" ? "HR Admin" : "Employee"}</option>)}</select> : <input name={name} type={type} placeholder={placeholder} required={required} className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 outline-none focus:border-teal-500" />}</div>; }
+
+function EmployeeDashboard({ user, go }: { user: AuthUser; go: (page: Page) => void }) { return <div className="space-y-6"><PageHeading eyebrow="EMPLOYEE PORTAL" title={`Good morning, ${user.name.split(" ")[0]}.`} description="Here is your workday at a glance." action={<button onClick={() => go("kiosk")} className="rounded-xl bg-teal-500 px-4 py-2.5 font-black text-slate-950">Check in / out</button>} /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Stat title="Today’s status" value="Present" detail="Checked in at 09:12 AM" color="text-emerald-500" /><Stat title="Hours logged" value="06h 18m" detail="Target: 08h 00m" /><Stat title="Leave balance" value="14 days" detail="Paid leave available" /><Stat title="Pending request" value="01" detail="Sick leave · under review" /></div><div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]"><Card title="Attendance activity" right="This week"><div className="space-y-4">{["Mon", "Tue", "Wed", "Thu", "Fri"].map((day, index) => <div key={day} className="flex items-center gap-4"><span className="w-9 text-sm font-bold">{day}</span><div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--border)]"><div className="h-full rounded-full bg-teal-500" style={{ width: `${[100, 100, 92, 78, 60][index]}%` }} /></div><span className="text-sm text-[var(--muted)]">{["8h 12m", "8h 05m", "7h 38m", "6h 18m", "In progress"][index]}</span></div>)}</div></Card><Card title="Quick actions"><div className="grid gap-3"><QuickAction icon={<Camera />} title="Kiosk attendance" text="Check in with camera and GPS" onClick={() => go("kiosk")} /><QuickAction icon={<CalendarDays />} title="Apply for leave" text="Submit a leave request" onClick={() => go("leave")} /><QuickAction icon={<FileText />} title="View payslips" text="Review your payroll records" onClick={() => go("payroll")} /></div></Card></div><Card title="Recent activity"><div className="divide-y divide-[var(--border)]">{["You checked in using Smart Kiosk", "Leave request sent for review", "July payslip is now available"].map((item, index) => <div key={item} className="flex items-center gap-3 py-4"><div className="rounded-full bg-teal-500/15 p-2 text-teal-600">{index === 0 ? <CheckCircle2 size={17} /> : <Bell size={17} />}</div><div><p className="font-bold">{item}</p><p className="text-sm text-[var(--muted)]">{index === 0 ? "Today · 09:12 AM" : index === 1 ? "Yesterday" : "August 01"}</p></div></div>)}</div></Card></div>; }
+
+function AdminDashboard({ user, go }: { user: AuthUser; go: (page: Page) => void }) { return <div className="space-y-6"><PageHeading eyebrow="HR ADMIN PORTAL" title={`Welcome, ${user.name.split(" ")[0]}.`} description="Monitor workforce health, exceptions, and approvals." action={<button onClick={() => go("directory")} className="rounded-xl bg-teal-500 px-4 py-2.5 font-black text-slate-950">Manage employees</button>} /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Stat title="Active workforce" value="248" detail="+8 this month" /><Stat title="Present today" value="213" detail="86% attendance" color="text-emerald-500" /><Stat title="Pending leaves" value="12" detail="Needs review" color="text-orange-500" /><Stat title="Flagged check-ins" value="04" detail="Outside geofence" color="text-red-500" /></div><div className="grid gap-6 lg:grid-cols-2"><Card title="Flagged location check-ins" right="View all"><div className="space-y-4">{[["Rohan Mehta", "08:57 AM", "128m from permitted location"], ["Fatima Ali", "09:06 AM", "No location signal"], ["Arjun Das", "09:18 AM", "Camera image needs review"]].map(([name, time, note]) => <div key={name} className="flex items-start gap-3 rounded-xl border border-[var(--border)] p-3"><div className="grid h-10 w-10 place-items-center rounded-full bg-orange-500/15 font-black text-orange-500">{name[0]}</div><div className="min-w-0 flex-1"><p className="font-bold">{name}</p><p className="text-sm text-[var(--muted)]">{time} · {note}</p></div><button className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm font-bold">Review</button></div>)}</div></Card><Card title="Leave approval queue" right="12 pending"><div className="space-y-4">{[["Priya Nair", "Paid leave · Aug 26–27"], ["Dev Kumar", "Sick leave · Aug 23"], ["Nisha Roy", "Unpaid leave · Aug 29–31"]].map(([name, note]) => <div key={name} className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-full bg-blue-500/15 font-black text-blue-500">{name[0]}</div><div className="flex-1"><p className="font-bold">{name}</p><p className="text-sm text-[var(--muted)]">{note}</p></div><button className="rounded-lg bg-emerald-500/15 px-3 py-1.5 text-sm font-bold text-emerald-600">Approve</button></div>)}</div></Card></div><Card title="Workforce attendance"><div className="grid gap-4 sm:grid-cols-3"><Stat title="On-time arrivals" value="78%" detail="Above weekly average" color="text-emerald-500" /><Stat title="Late arrivals" value="11%" detail="27 employees" color="text-orange-500" /><Stat title="Absent" value="3%" detail="8 employees" color="text-red-500" /></div></Card></div>; }
+
+function Kiosk() { const [camera, setCamera] = useState(false); const [location, setLocation] = useState<"idle" | "checking" | "verified" | "flagged">("idle"); const [checkedIn, setCheckedIn] = useState(false); function verifyLocation() { setLocation("checking"); setTimeout(() => setLocation("verified"), 1000); } return <div className="mx-auto max-w-4xl space-y-6"><PageHeading eyebrow="SMART KIOSK" title="Verified attendance check-in" description="Capture a photo and validate the current device location." /><div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]"><Card title="Photo verification"><div className="grid min-h-72 place-items-center rounded-2xl border-2 border-dashed border-[var(--border)] bg-[var(--background)] p-6 text-center">{camera ? <div><div className="mx-auto grid h-28 w-28 place-items-center rounded-full bg-teal-500/15 text-teal-600"><ScanFace size={54} /></div><p className="mt-5 text-lg font-black">Camera snapshot ready</p><p className="mt-2 text-sm text-[var(--muted)]">Your attendance photo will be securely attached to this record.</p></div> : <div><Camera className="mx-auto text-[var(--muted)]" size={48} /><p className="mt-4 font-black">Camera permission required</p><button onClick={() => setCamera(true)} className="mt-4 rounded-xl bg-teal-500 px-4 py-2 font-black text-slate-950">Enable camera</button></div>}</div></Card><Card title="Location verification"><div className="space-y-5"><div className="rounded-2xl border border-[var(--border)] p-4"><div className="flex gap-3"><MapPin className="text-teal-500" /><div><p className="font-bold">Office geofence</p><p className="text-sm text-[var(--muted)]">Allowed radius: 100 metres</p></div></div><p className="mt-4 text-sm text-[var(--muted)]">{location === "idle" && "Your location has not been checked."}{location === "checking" && "Checking high-accuracy GPS…"}{location === "verified" && "Location verified — you are within the allowed radius."}{location === "flagged" && "Location requires HR Admin approval."}</p></div><button onClick={verifyLocation} className="w-full rounded-xl border border-[var(--border)] py-3 font-black">{location === "checking" ? "VERIFYING…" : "Verify GPS location"}</button><button disabled={!camera || location !== "verified"} onClick={() => setCheckedIn(true)} className="w-full rounded-xl bg-teal-500 py-3 font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40">{checkedIn ? "CHECKED IN SUCCESSFULLY" : "Confirm check-in"}</button>{checkedIn && <p className="rounded-xl bg-emerald-500/10 p-3 text-sm font-bold text-emerald-600">Attendance recorded as PRESENT. Check-in time: 09:12 AM.</p>}</div></Card></div></div>; }
+
+function LeavePage() { const [submitted, setSubmitted] = useState(false); return <div className="mx-auto max-w-5xl space-y-6"><PageHeading eyebrow="LEAVE MANAGEMENT" title="Apply for time off" description="Submit a request and track the HR approval status." /><div className="grid gap-6 lg:grid-cols-[1fr_1fr]"><Card title="New leave request"><form action={() => setSubmitted(true)} className="space-y-4"><Field label="Leave type" name="leaveType" select options={["PAID", "SICK", "UNPAID"]} /><div className="grid gap-4 sm:grid-cols-2"><Field label="Start date" name="start" type="date" required /><Field label="End date" name="end" type="date" required /></div><div><label className="mb-2 block text-sm font-bold">Reason</label><textarea required placeholder="Tell HR about your leave request" className="min-h-28 w-full rounded-xl border border-[var(--border)] bg-[var(--background)] p-3 outline-none focus:border-teal-500" /></div><button className="w-full rounded-xl bg-teal-500 py-3 font-black text-slate-950">Submit request</button>{submitted && <p className="rounded-xl bg-emerald-500/10 p-3 text-sm font-bold text-emerald-600">Request submitted successfully for HR review.</p>}</form></Card><Card title="Your leave balance"><div className="space-y-4"><Balance label="Paid leave" value="14 / 18 days" percent={78} /><Balance label="Sick leave" value="6 / 8 days" percent={75} /><Balance label="Unpaid leave" value="Available when needed" percent={20} /></div><h3 className="mt-8 font-black">Recent requests</h3><div className="mt-3 space-y-3"><Request name="Sick leave" date="Aug 12" status="Approved" /><Request name="Paid leave" date="Aug 26–27" status="Pending" /></div></Card></div></div>; }
+function Balance({ label, value, percent }: { label: string; value: string; percent: number }) { return <div><div className="flex justify-between gap-3 text-sm"><span className="font-bold">{label}</span><span className="text-[var(--muted)]">{value}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--border)]"><div className="h-full rounded-full bg-teal-500" style={{ width: `${percent}%` }} /></div></div>; }
+function Request({ name, date, status }: { name: string; date: string; status: string }) { return <div className="flex items-center justify-between rounded-xl border border-[var(--border)] p-3"><div><p className="font-bold">{name}</p><p className="text-sm text-[var(--muted)]">{date}</p></div><span className={`rounded-full px-3 py-1 text-xs font-black ${status === "Approved" ? "bg-emerald-500/15 text-emerald-600" : "bg-orange-500/15 text-orange-500"}`}>{status}</span></div>; }
+
+function PayrollPage({ user }: { user: AuthUser }) { return <div className="mx-auto max-w-5xl space-y-6"><PageHeading eyebrow="PAYROLL" title="Payslips and compensation" description="Review your payment history and monthly salary details." /><div className="grid gap-6 md:grid-cols-[1.1fr_0.9fr]"><Card title="August 2026 payslip" right="Finalized"><div className="space-y-4"><PayrollRow label="Base salary" value="₹45,000" /><PayrollRow label="Allowances" value="₹7,500" /><PayrollRow label="Tax & deductions" value="− ₹6,950" /><div className="border-t border-[var(--border)] pt-4"><PayrollRow label="Net pay" value="₹45,550" strong /></div><button className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-teal-500 py-3 font-black text-slate-950"><FileText size={18} /> Download payslip</button></div></Card><Card title="Payroll history"><div className="space-y-3">{["August 2026", "July 2026", "June 2026", "May 2026"].map((month, index) => <div key={month} className="flex items-center justify-between rounded-xl border border-[var(--border)] p-3"><div><p className="font-bold">{month}</p><p className="text-sm text-[var(--muted)]">Net pay: ₹{index === 0 ? "45,550" : "46,200"}</p></div><button className="text-sm font-black text-teal-600">View</button></div>)}</div></Card></div></div>; }
+function PayrollRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) { return <div className={`flex justify-between ${strong ? "text-lg font-black text-[var(--navy)]" : "text-sm"}`}><span className={strong ? "" : "text-[var(--muted)]"}>{label}</span><span>{value}</span></div>; }
+
+function ProfilePage({ user }: { user: AuthUser }) { return <div className="mx-auto max-w-4xl space-y-6"><PageHeading eyebrow="MY PROFILE" title="Personal details" description="Update personal contact details. Job and compensation data are managed by HR." /><Card title="Employee profile"><div className="flex flex-col gap-6 sm:flex-row"><div className="grid h-24 w-24 place-items-center rounded-3xl bg-teal-500 text-3xl font-black text-slate-950">{user.name[0]}</div><div className="grid flex-1 gap-4 sm:grid-cols-2"><ProfileItem label="Full name" value={user.name} /><ProfileItem label="Employee ID" value={user.employeeId} /><ProfileItem label="Work email" value={user.email} /><ProfileItem label="Department" value="Product Engineering" /><ProfileItem label="Job title" value="Software Associate" /><ProfileItem label="Joining date" value="June 12, 2025" /></div></div></Card><Card title="Contact information"><div className="grid gap-4 sm:grid-cols-2"><Field label="Phone" name="phone" placeholder="+91 98765 43210" /><Field label="Address" name="address" placeholder="Bangalore, Karnataka" /></div><button className="mt-4 rounded-xl bg-teal-500 px-5 py-3 font-black text-slate-950">Save personal changes</button></Card></div>; }
+function ProfileItem({ label, value }: { label: string; value: string }) { return <div><p className="text-xs font-bold uppercase tracking-wide text-[var(--muted)]">{label}</p><p className="mt-1 font-bold">{value}</p></div>; }
+
+function DirectoryPage({ isAdmin }: { isAdmin: boolean }) { const [query, setQuery] = useState(""); const people = [["Priya Nair", "EMP-1042", "Product Engineering", "Active"], ["Rohan Mehta", "EMP-1043", "Operations", "Active"], ["Fatima Ali", "EMP-1044", "Finance", "On leave"], ["Arjun Das", "EMP-1045", "Customer Success", "Active"]].filter((person) => person.join(" ").toLowerCase().includes(query.toLowerCase())); return <div className="space-y-6"><PageHeading eyebrow="EMPLOYEE DIRECTORY" title="People at MY BUDDY" description={isAdmin ? "Search, inspect, and manage company employee records." : "Find colleagues and their basic organisational details."} /><Card title="Directory"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name, ID, or department" className="mb-5 w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 outline-none focus:border-teal-500" /><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="border-b border-[var(--border)] text-[var(--muted)]"><tr><th className="px-3 py-3">Employee</th><th className="px-3 py-3">ID</th><th className="px-3 py-3">Department</th><th className="px-3 py-3">Status</th>{isAdmin && <th className="px-3 py-3">Action</th>}</tr></thead><tbody>{people.map(([name, id, department, status]) => <tr key={id} className="border-b border-[var(--border)]"><td className="px-3 py-4 font-bold">{name}</td><td className="px-3 py-4 text-[var(--muted)]">{id}</td><td className="px-3 py-4">{department}</td><td className="px-3 py-4"><span className={`rounded-full px-2 py-1 text-xs font-bold ${status === "Active" ? "bg-emerald-500/15 text-emerald-600" : "bg-orange-500/15 text-orange-500"}`}>{status}</span></td>{isAdmin && <td className="px-3 py-4"><button className="font-black text-teal-600">Edit</button></td>}</tr>)}</tbody></table></div></Card></div>; }
+
+function PageHeading({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: React.ReactNode }) { return <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-black tracking-wide text-teal-600">{eyebrow}</p><h1 className="mt-1 text-3xl font-black tracking-tight text-[var(--navy)]">{title}</h1><p className="mt-2 text-[var(--muted)]">{description}</p></div>{action}</div>; }
+function Card({ title, right, children }: { title: string; right?: string; children: React.ReactNode }) { return <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm"><div className="mb-5 flex items-center justify-between gap-3"><h2 className="font-black text-[var(--navy)]">{title}</h2>{right && <span className="text-sm font-bold text-[var(--muted)]">{right}</span>}</div>{children}</section>; }
+function Stat({ title, value, detail, color = "text-[var(--navy)]" }: { title: string; value: string; detail: string; color?: string }) { return <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5"><p className="text-sm font-bold text-[var(--muted)]">{title}</p><p className={`mt-3 text-3xl font-black ${color}`}>{value}</p><p className="mt-1 text-sm text-[var(--muted)]">{detail}</p></div>; }
+function QuickAction({ icon, title, text, onClick }: { icon: React.ReactNode; title: string; text: string; onClick: () => void }) { return <button onClick={onClick} className="flex items-center gap-3 rounded-xl border border-[var(--border)] p-3 text-left hover:border-teal-500"><div className="rounded-lg bg-teal-500/15 p-2 text-teal-600">{icon}</div><div className="min-w-0 flex-1"><p className="font-bold">{title}</p><p className="text-xs text-[var(--muted)]">{text}</p></div><ChevronRight size={18} className="text-[var(--muted)]" /></button>; }

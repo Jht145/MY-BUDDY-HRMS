@@ -1,0 +1,734 @@
+< !DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>My Buddy | B2B SaaS Workspace Gateway</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"><style> :root {
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    /* Dark Theme (Default Matte Obsidian Zinc) */
+    --bg: #09090B;
+    --card-bg: #121212;
+    --card-border: #27272A;
+    --input-bg: #18181B;
+    --input-border: #27272A;
+    --text-primary: #FAFAFA;
+    --text-muted: #A1A1AA;
+
+    /* Teal/Cyan Accent matched to logo line art */
+    --accent-primary: #0D9488;
+    --accent-hover: #0F766E;
+    --accent-focus-ring: rgba(13, 148, 136, 0.25);
+
+    --danger: #F87171;
+    --danger-bg: rgba(248, 113, 113, 0.08);
+    --danger-border: rgba(248, 113, 113, 0.25);
+
+    --success: #34D399;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="light"] {
+    /* Light Theme Tokens */
+    --bg: #F4F4F5;
+    --card-bg: #FFFFFF;
+    --card-border: #E4E4E7;
+    --input-bg: #F9FAFB;
+    --input-border: #E4E4E7;
+    --text-primary: #18181B;
+    --text-muted: #71717A;
+
+    --accent-primary: #0D9488;
+    --accent-hover: #0F766E;
+    --accent-focus-ring: rgba(13, 148, 136, 0.25);
+
+    --shadow-card: 0 10px 25px rgba(0, 0, 0, 0.06);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-sans);
+    background-color: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem 1.25rem;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Fixed Top-Right Accessible Theme Toggle */
+.theme-toggle-fixed {
+    position: fixed;
+    top: 1.25rem;
+    right: 1.25rem;
+    z-index: 100;
+}
+
+.theme-toggle-btn {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    color: var(--text-primary);
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.theme-toggle-btn:hover {
+    border-color: var(--text-muted);
+}
+
+/* Responsive Centered Logo with Light/Dark Mode Parity */
+.brand-logo-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.brand-logo-img {
+    max-height: 76px;
+    width: auto;
+    object-fit: contain;
+    display: block;
+    transition: opacity 0.2s ease;
+}
+
+/* Light Mode: Show dark-text logo */
+.logo-light-mode {
+    display: block;
+}
+
+.logo-dark-mode {
+    display: none;
+}
+
+/* Dark Mode: Show white-text logo */
+[data-theme="dark"] .logo-light-mode {
+    display: none;
+}
+
+[data-theme="dark"] .logo-dark-mode {
+    display: block;
+}
+
+/* Fixed 440px Auth Card Surface */
+.auth-card {
+    width: 100%;
+    max-width: 440px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    padding: 2.25rem 2rem;
+    position: relative;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.auth-card.shake {
+    animation: cardShake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes cardShake {
+
+    10%,
+    90% {
+        transform: translate3d(-1px, 0, 0);
+    }
+
+    20%,
+    80% {
+        transform: translate3d(2px, 0, 0);
+    }
+
+    30%,
+    50%,
+    70% {
+        transform: translate3d(-4px, 0, 0);
+    }
+
+    40%,
+    60% {
+        transform: translate3d(4px, 0, 0);
+    }
+}
+
+/* Form Headlines & Typography */
+.form-header {
+    margin-bottom: 1.5rem;
+    text-align: left;
+}
+
+.form-headline {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.form-subtitle {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+/* Forms & 42px Input Fields */
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.form-row-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.85rem;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.form-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+}
+
+.form-input {
+    width: 100%;
+    height: 42px;
+    padding: 0 0.85rem;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    transition: all 0.15s ease;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px var(--accent-focus-ring);
+}
+
+.form-input.is-invalid {
+    border-color: var(--danger);
+}
+
+.input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.toggle-password-btn {
+    position: absolute;
+    right: 0.6rem;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s ease;
+}
+
+.toggle-password-btn:hover {
+    color: var(--text-primary);
+}
+
+.error-text {
+    font-size: 0.75rem;
+    color: var(--danger);
+    margin-top: 0.15rem;
+}
+
+/* Teal Primary CTA Button */
+.btn-primary {
+    width: 100%;
+    height: 42px;
+    background: var(--accent-primary);
+    color: #ffffff;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: all 0.15s ease;
+    margin-top: 0.35rem;
+}
+
+.btn-primary:hover {
+    background: var(--accent-hover);
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Footer Text Switcher */
+.form-footer-switch {
+    margin-top: 1.25rem;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.switch-link {
+    color: var(--accent-primary);
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    margin-left: 0.25rem;
+    transition: color 0.15s ease;
+}
+
+.switch-link:hover {
+    text-decoration: underline;
+    color: var(--accent-hover);
+}
+
+.alert-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.75rem 0.85rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.825rem;
+}
+
+.alert-banner.danger {
+    background: var(--danger-bg);
+    border: 1px solid var(--danger-border);
+    color: var(--danger);
+}
+
+.spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+#dashboardView {
+    display: none;
+    width: 100%;
+    max-width: 900px;
+}
+
+</style></head><body>< !-- Accessible Theme Toggle Button (Top Right) --><div class="theme-toggle-fixed"><button class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle Light/Dark Theme"><svg id="sunIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></svg><svg id="moonIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 0 1 1-9-9Z" /></svg></button></div>< !-- Pure Production Auth Gateway --><div class="auth-page-wrapper" id="authView"><div class="auth-card" id="authCard">< !-- Light / Dark Adaptive Logo Container --><div class="brand-logo-container"><img src="logo_light.png" alt="My Buddy Logo" class="brand-logo-img logo-light-mode" /><img src="logo_dark.png" alt="My Buddy Logo" class="brand-logo-img logo-dark-mode" /></div>< !-- Form View Host Container --><div id="formContainer"></div></div></div>< !-- Authenticated Workspace View --><div id="dashboardView"><div style="background:var(--card-bg); border:1px solid var(--card-border); border-radius:var(--radius-md); padding:2rem;"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; border-bottom:1px solid var(--card-border); padding-bottom:1rem;"><div><h2 style="font-size:1.5rem; font-weight:700;" id="dashTitle">My Buddy Workspace</h2><p style="color:var(--text-muted); font-size:0.875rem;" id="dashSub">Role-based Session Active</p></div><button class="btn-primary" id="logoutBtn" style="width:auto; height:36px; padding:0 1rem; text-transform:none;">Sign Out</button></div><div id="dashBody" style="font-size:0.9rem; color:var(--text-muted);"></div></div></div><script> // System & LocalStorage Theme Persistence
+const THEME_KEY='theme';
+
+function initTheme() {
+    const savedTheme=localStorage.getItem(THEME_KEY);
+    const systemDark=window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const initialTheme=savedTheme || (systemDark ? 'dark' : 'light');
+    applyTheme(initialTheme);
+}
+
+function applyTheme(theme) {
+    if (theme==='dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.getElementById('sunIcon').style.display='inline';
+        document.getElementById('moonIcon').style.display='none';
+    }
+
+    else {
+        document.documentElement.setAttribute('data-theme', 'light');
+        document.getElementById('sunIcon').style.display='none';
+        document.getElementById('moonIcon').style.display='inline';
+    }
+
+    localStorage.setItem(THEME_KEY, theme);
+}
+
+document.getElementById('themeToggleBtn').addEventListener('click', ()=> {
+        const current=localStorage.getItem(THEME_KEY) || 'dark';
+        applyTheme(current==='dark' ? 'light' : 'dark');
+    });
+
+// Auth Store & JWT Core
+const ROLE_ENUM= {
+    EMPLOYEE: 'EMPLOYEE', HR_ADMIN: 'HR_ADMIN'
+}
+
+;
+const USERS_KEY='my_buddy_prod_users_v2';
+const TOKEN_KEY='my_buddy_prod_jwt_v2';
+
+const SEED_USERS=[ {
+    user_id: 'usr_1001', company_name: 'Acme Inc.', employee_id: 'ADM-001', first_name: 'Sarah', last_name: 'Jenkins', email: 'sarah.admin@acme.com', phone: '9876543210', password: 'Admin@12345', role: ROLE_ENUM.HR_ADMIN
+}
+
+,
+{
+user_id: 'usr_2004', company_name: 'Acme Inc.', employee_id: 'EMP-2004', first_name: 'Alex', last_name: 'Morgan', email: 'alex.morgan@acme.com', phone: '9876543211', password: 'User@12345', role: ROLE_ENUM.EMPLOYEE
+}
+
+];
+
+function initStore() {
+    if ( !localStorage.getItem(USERS_KEY)) {
+        localStorage.setItem(USERS_KEY, JSON.stringify(SEED_USERS));
+    }
+}
+
+function createJWT(user) {
+    const header=btoa(JSON.stringify({
+            alg: 'HS256', typ: 'JWT'
+        }));
+
+const payload=btoa(JSON.stringify({
+        user_id: user.user_id,
+        company_name: user.company_name,
+        email: user.email,
+        role: user.role,
+        iat: Math.floor(Date.now()/1000),
+        exp: Math.floor(Date.now()/1000) + 3600*12
+    }));
+
+return `$ {
+    header
+}
+
+.$ {
+    payload
+}
+
+.sig_my_buddy`;
+}
+
+function parseJWT(token) {
+    try {
+        const parts=token.split('.');
+        return JSON.parse(atob(parts[1]));
+    }
+
+    catch (e) {
+        return null;
+    }
+}
+
+// Dynamic Form State & Password Eye Toggles
+let activeView='signin'; // 'signin' or 'signup'
+let showPassSignIn=false;
+let showPassSignUp=false;
+let showPassConfirmSignUp=false;
+
+const authCard=document.getElementById('authCard');
+const formContainer=document.getElementById('formContainer');
+
+// Render Sign In View (Welcome Back)
+function renderSignInView(errorMsg='') {
+    activeView='signin';
+
+    formContainer.innerHTML=` <div class="form-header"><h2 class="form-headline">Welcome back</h2><p class="form-subtitle">Sign in to continue to your workspace.</p></div><form class="auth-form" id="signInForm" novalidate>$ {
+        errorMsg ? `<div class="alert-banner danger"><div>$ {
+            errorMsg
+        }
+
+        </div></div>` : ''
+    }
+
+    <div class="form-group"><label class="form-label" for="signinEmail">Login ID / Email</label><input type="email" id="signinEmail" class="form-input" placeholder="Enter your email" required /><div class="error-text" id="signinEmailErr" style="display:none;"></div></div><div class="form-group"><label class="form-label" for="signinPassword">Password</label><div class="input-wrapper"><input type="${showPassSignIn ? 'text' : 'password'}" id="signinPassword" class="form-input" placeholder="Enter your password" required /><button type="button" class="toggle-password-btn" id="toggleSigninPass"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg></button></div><div class="error-text" id="signinPassErr" style="display:none;"></div></div><button type="submit" class="btn-primary" id="signinBtn"><span>SIGN IN</span></button></form><div class="form-footer-switch">Don't have an account? <span class="switch-link" id="switchToSignUp">Sign Up</span>
+ </div>`;
+
+    document.getElementById('toggleSigninPass').addEventListener('click', ()=> {
+            showPassSignIn= !showPassSignIn;
+            renderSignInView(errorMsg);
+        });
+
+    document.getElementById('switchToSignUp').addEventListener('click', ()=> {
+            renderSignUpView();
+        });
+
+    document.getElementById('signInForm').addEventListener('submit', (e)=> {
+            e.preventDefault();
+            const email=document.getElementById('signinEmail').value.trim();
+            const password=document.getElementById('signinPassword').value;
+
+            let valid=true;
+            const emailErr=document.getElementById('signinEmailErr');
+            const passErr=document.getElementById('signinPassErr');
+            emailErr.style.display='none'; passErr.style.display='none';
+
+            if ( !email || !/\S+@\S+\.\S+/.test(email)) {
+                emailErr.innerText='Valid corporate email required';
+                emailErr.style.display='block'; valid=false;
+            }
+
+            if ( !password) {
+                passErr.innerText='Password is required';
+                passErr.style.display='block'; valid=false;
+            }
+
+            if ( !valid) {
+                authCard.classList.add('shake');
+                setTimeout(()=> authCard.classList.remove('shake'), 400);
+                return;
+            }
+
+            const btn=document.getElementById('signinBtn');
+            btn.disabled=true;
+            btn.innerHTML='<div class="spinner"></div> Signing in...';
+
+            setTimeout(()=> {
+                    initStore();
+                    const users=JSON.parse(localStorage.getItem(USERS_KEY));
+                    const user=users.find(u=> u.email.toLowerCase()===email.toLowerCase() && u.password===password);
+
+                    if (user) {
+                        const token=createJWT(user);
+                        localStorage.setItem(TOKEN_KEY, token);
+                        handleRouting();
+                    }
+
+                    else {
+                        authCard.classList.add('shake');
+                        setTimeout(()=> authCard.classList.remove('shake'), 400);
+                        renderSignInView('Invalid corporate email or password credentials.');
+                    }
+                }
+
+                , 500);
+        });
+}
+
+// Render Sign Up View (Create an account)
+function renderSignUpView(errorMsg='') {
+    activeView='signup';
+
+    formContainer.innerHTML=` <div class="form-header"><h2 class="form-headline">Create an account</h2><p class="form-subtitle">Register your company and account details.</p></div><form class="auth-form" id="signUpForm" novalidate>$ {
+        errorMsg ? `<div class="alert-banner danger"><div>$ {
+            errorMsg
+        }
+
+        </div></div>` : ''
+    }
+
+    <div class="form-group"><label class="form-label" for="signupCompany">Company Name</label><input type="text" id="signupCompany" class="form-input" placeholder="Enter company name" required /><div class="error-text" id="signupCompErr" style="display:none;"></div></div><div class="form-group"><label class="form-label" for="signupName">Name</label><input type="text" id="signupName" class="form-input" placeholder="Enter full name" required /><div class="error-text" id="signupNameErr" style="display:none;"></div></div><div class="form-row-2col"><div class="form-group"><label class="form-label" for="signupEmail">Email</label><input type="email" id="signupEmail" class="form-input" placeholder="Enter email" required /><div class="error-text" id="signupEmailErr" style="display:none;"></div></div><div class="form-group"><label class="form-label" for="signupPhone">Phone</label><input type="tel" id="signupPhone" class="form-input" placeholder="10-digit phone number" required /><div class="error-text" id="signupPhoneErr" style="display:none;"></div></div></div><div class="form-group"><label class="form-label" for="signupPassword">Password</label><div class="input-wrapper"><input type="${showPassSignUp ? 'text' : 'password'}" id="signupPassword" class="form-input" placeholder="At least 8 characters" required /><button type="button" class="toggle-password-btn" id="toggleSignupPass"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg></button></div><div class="error-text" id="signupPassErr" style="display:none;"></div></div><div class="form-group"><label class="form-label" for="signupConfirmPassword">Confirm Password</label><div class="input-wrapper"><input type="${showPassConfirmSignUp ? 'text' : 'password'}" id="signupConfirmPassword" class="form-input" placeholder="Re-enter password" required /><button type="button" class="toggle-password-btn" id="toggleConfirmPass"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg></button></div><div class="error-text" id="signupConfirmPassErr" style="display:none;"></div></div><button type="submit" class="btn-primary" id="signupBtn"><span>SIGN UP</span></button></form><div class="form-footer-switch">Already have an account? <span class="switch-link" id="switchToSignIn">Sign In</span></div>`;
+
+    document.getElementById('toggleSignupPass').addEventListener('click', ()=> {
+            showPassSignUp= !showPassSignUp;
+            renderSignUpView(errorMsg);
+        });
+
+    document.getElementById('toggleConfirmPass').addEventListener('click', ()=> {
+            showPassConfirmSignUp= !showPassConfirmSignUp;
+            renderSignUpView(errorMsg);
+        });
+
+    document.getElementById('switchToSignIn').addEventListener('click', ()=> {
+            renderSignInView();
+        });
+
+    document.getElementById('signUpForm').addEventListener('submit', (e)=> {
+            e.preventDefault();
+
+            const company=document.getElementById('signupCompany').value.trim();
+            const fullName=document.getElementById('signupName').value.trim();
+            const email=document.getElementById('signupEmail').value.trim();
+            const phone=document.getElementById('signupPhone').value.trim();
+            const password=document.getElementById('signupPassword').value;
+            const confirmPassword=document.getElementById('signupConfirmPassword').value;
+
+            let valid=true;
+            const compErr=document.getElementById('signupCompErr');
+            const nameErr=document.getElementById('signupNameErr');
+            const emailErr=document.getElementById('signupEmailErr');
+            const phoneErr=document.getElementById('signupPhoneErr');
+            const passErr=document.getElementById('signupPassErr');
+            const confirmErr=document.getElementById('signupConfirmPassErr');
+
+            [compErr, nameErr, emailErr, phoneErr, passErr, confirmErr].forEach(el=> el.style.display='none');
+
+            if ( !company) {
+                compErr.innerText='Company name required'; compErr.style.display='block'; valid=false;
+            }
+
+            if ( !fullName) {
+                nameErr.innerText='Full name required'; nameErr.style.display='block'; valid=false;
+            }
+
+            if ( !email || !/\S+@\S+\.\S+/.test(email)) {
+                emailErr.innerText='Valid email required'; emailErr.style.display='block'; valid=false;
+            }
+
+            if ( !phone || !/^[0-9] {
+                    10
+                }
+
+                $/.test(phone)) {
+                phoneErr.innerText='Valid 10-digit phone required'; phoneErr.style.display='block'; valid=false;
+            }
+
+            if ( !password || password.length < 8) {
+                passErr.innerText='Password must be at least 8 characters'; passErr.style.display='block'; valid=false;
+            }
+
+            if (password !==confirmPassword) {
+                confirmErr.innerText='Passwords do not match'; confirmErr.style.display='block'; valid=false;
+            }
+
+            if ( !valid) {
+                authCard.classList.add('shake');
+                setTimeout(()=> authCard.classList.remove('shake'), 400);
+                return;
+            }
+
+            const btn=document.getElementById('signupBtn');
+            btn.disabled=true;
+            btn.innerHTML='<div class="spinner"></div> Creating Account...';
+
+            setTimeout(()=> {
+                    initStore();
+                    const users=JSON.parse(localStorage.getItem(USERS_KEY));
+
+                    if (users.some(u=> u.email.toLowerCase()===email.toLowerCase())) {
+                        renderSignUpView(`Work email $ {
+                                email
+                            }
+
+                            is already registered.`);
+                        return;
+                    }
+
+                    const parts=fullName.split(' ');
+                    const first_name=parts[0] || fullName;
+                    const last_name=parts.slice(1).join(' ') || 'Admin';
+
+                    const newAdmin= {
+                        user_id: `usr_$ {
+                            Date.now().toString().slice(-5)
+                        }
+
+                        `,
+                        company_name: company,
+                        employee_id: `ADM-$ {
+                            Math.floor(100 + Math.random() * 900)
+                        }
+
+                        `,
+                        first_name,
+                        last_name,
+                        email: email.toLowerCase(),
+                        phone,
+                        password,
+                        role: ROLE_ENUM.HR_ADMIN
+                    }
+
+                    ;
+
+                    users.push(newAdmin);
+                    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+
+                    const token=createJWT(newAdmin);
+                    localStorage.setItem(TOKEN_KEY, token);
+                    handleRouting();
+                }
+
+                , 500);
+        });
+}
+
+// Routing Logic
+function handleRouting() {
+    initStore();
+    initTheme();
+
+    const token=localStorage.getItem(TOKEN_KEY);
+    const session=parseJWT(token || '');
+
+    const authView=document.getElementById('authView');
+    const dashView=document.getElementById('dashboardView');
+
+    if ( !session) {
+        authView.style.display='flex';
+        dashView.style.display='none';
+        renderSignInView();
+    }
+
+    else {
+        authView.style.display='none';
+        dashView.style.display='block';
+
+        const dashTitle=document.getElementById('dashTitle');
+        const dashSub=document.getElementById('dashSub');
+        const dashBody=document.getElementById('dashBody');
+
+        if (session.role===ROLE_ENUM.HR_ADMIN) {
+            dashTitle.innerText='HR Executive Command (/admin/dashboard)';
+
+            dashSub.innerText=`Organization: $ {
+                session.company_name
+            }
+
+            | User Email: $ {
+                session.email
+            }
+
+            | Role: HR_ADMIN`;
+            dashBody.innerHTML=` <div style="padding:1rem; background:var(--input-bg); border-radius:var(--radius-sm); margin-top:1rem;"><p>Welcome to My Buddy Workspace. Organization setup & administrative operations active.</p></div>`;
+        }
+
+        else {
+            dashTitle.innerText='Employee Workspace (/dashboard)';
+
+            dashSub.innerText=`Organization: $ {
+                session.company_name
+            }
+
+            | User Email: $ {
+                session.email
+            }
+
+            | Role: EMPLOYEE`;
+            dashBody.innerHTML=` <div style="padding:1rem; background:var(--input-bg); border-radius:var(--radius-sm); margin-top:1rem;"><p>Welcome to My Buddy Employee Workspace. Shift clock-in & time off tracker active.</p></div>`;
+        }
+    }
+}
+
+document.getElementById('logoutBtn').addEventListener('click', ()=> {
+        localStorage.removeItem(TOKEN_KEY);
+        handleRouting();
+    });
+
+document.addEventListener('DOMContentLoaded', ()=> {
+        handleRouting();
+    });
+</script></body></html>

@@ -16,6 +16,7 @@ import {
   Users,
   Building,
   RefreshCw,
+  Loader2,
   X,
   ArrowRight,
   ShieldCheck
@@ -163,7 +164,7 @@ export function AdminPayrollTab() {
                 setIsRefreshing(false);
                 setNotification({ message: 'Workforce payroll and compensation records synced from server!', type: 'success' });
                 setTimeout(() => setNotification(null), 3500);
-              }, 600);
+              }, 900);
             }
             return;
           }
@@ -196,7 +197,7 @@ export function AdminPayrollTab() {
         setIsRefreshing(false);
         setNotification({ message: 'Workforce payroll and compensation records synced from server!', type: 'success' });
         setTimeout(() => setNotification(null), 3500);
-      }, 600);
+      }, 900);
     }
   };
 
@@ -309,9 +310,13 @@ export function AdminPayrollTab() {
         <button
           onClick={() => loadPayrollData(true)}
           disabled={isRefreshing}
-          className="flex items-center gap-2 h-9 px-3.5 text-xs font-semibold rounded-lg bg-[var(--card)] border border-[var(--card-border)] hover:bg-[var(--input-bg)] text-[var(--foreground)] shadow-xs transition-all cursor-pointer disabled:opacity-50"
+          className="flex items-center gap-2 h-9 px-3.5 text-xs font-semibold rounded-lg bg-[var(--card)] border border-[var(--card-border)] hover:bg-[var(--input-bg)] text-[var(--foreground)] shadow-xs transition-all cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
         >
-          <RefreshCw className={`w-3.5 h-3.5 text-[var(--brand-teal)] ${isRefreshing ? 'animate-spin' : ''}`} />
+          {isRefreshing ? (
+            <Loader2 className="w-4 h-4 text-[var(--brand-teal)] animate-spin" />
+          ) : (
+            <RefreshCw className="w-3.5 h-3.5 text-[var(--brand-teal)]" />
+          )}
           <span>{isRefreshing ? 'Refreshing Records...' : 'Refresh Payroll'}</span>
         </button>
       </div>

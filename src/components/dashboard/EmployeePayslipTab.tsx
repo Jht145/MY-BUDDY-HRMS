@@ -11,6 +11,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   RefreshCw,
+  Loader2,
   CheckCircle2,
   X
 } from 'lucide-react';
@@ -187,10 +188,14 @@ export function EmployeePayslipTab() {
           <button
             onClick={() => loadPayslips(true)}
             disabled={isRefreshing}
-            className="flex items-center gap-1.5 h-9 px-3.5 text-xs font-semibold rounded-lg bg-[var(--card)] border border-[var(--card-border)] hover:bg-[var(--input-bg)] text-[var(--foreground)] shadow-xs transition-all cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 h-9 px-3.5 text-xs font-semibold rounded-lg bg-[var(--card)] border border-[var(--card-border)] hover:bg-[var(--input-bg)] text-[var(--foreground)] shadow-xs transition-all cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
             title="Refresh salary breakdown from server"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-[var(--brand-teal)] ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? (
+              <Loader2 className="w-3.5 h-3.5 text-[var(--brand-teal)] animate-spin" />
+            ) : (
+              <RefreshCw className="w-3.5 h-3.5 text-[var(--brand-teal)]" />
+            )}
             <span className="hidden sm:inline">{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
           </button>
 

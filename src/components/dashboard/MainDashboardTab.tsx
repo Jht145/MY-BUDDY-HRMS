@@ -54,29 +54,73 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
   // Dynamic flagged check-ins state
   const [flaggedLogs, setFlaggedLogs] = useState<FlaggedCheckin[]>([]);
 
-  // Load local storage flagged check-ins on mount & kiosk update
-  const loadFlaggedLogs = () => {
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  
+  const fetchAdminData = async () => {
+    if (!user || user.role !== 'HR_ADMIN') return;
+
+    // Load local storage flagged check-ins first
     const mockCheckins: FlaggedCheckin[] = [
       { name: 'Rohan Mehta', time: '08:57 AM', note: '128m from permitted location', coordinates: '12.9729, 77.5958', empId: 'EMP-1043', department: 'Operations', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&fit=crop&q=80' },
       { name: 'Fatima Ali', time: '09:06 AM', note: 'No location signal', coordinates: 'Unknown / Blocked', empId: 'EMP-1044', department: 'Finance', photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&fit=crop&q=80' },
       { name: 'Arjun Das', time: '09:18 AM', note: 'Camera image needs review', coordinates: '12.9716, 77.5946', empId: 'EMP-1045', department: 'Customer Success', photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&fit=crop&q=80' },
       { name: 'Dev Vashisht', time: '09:30 AM', note: 'Kiosk Geofence Bypass Warning', coordinates: '13.0827, 80.2707', empId: 'EMP-1088', department: 'Product Engineering', photo: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&fit=crop&q=80' },
     ];
+    let localFlagged = mockCheckins;
     if (typeof window !== 'undefined') {
       const raw = localStorage.getItem('my_buddy_hrms_flagged_checkins');
       if (raw) {
         try {
           const parsed = JSON.parse(raw);
-          setFlaggedLogs([...parsed, ...mockCheckins]);
-          return;
+          localFlagged = [...parsed, ...mockCheckins];
         } catch { /* ignore */ }
       }
     }
-    setFlaggedLogs(mockCheckins);
+    setFlaggedLogs(localFlagged);
+
+    try {
+      const token = localStorage.getItem('my_buddy_hrms_jwt_v4');
+      const headers = { 'Authorization': `Bearer ${token}` };
+      
+      const leavesRes = await fetch('http://localhost:8000/api/v1/leaves/admin/queue', { headers });
+      const leavesData = await leavesRes.json();
+      if (leavesData.success) {
+        setLeaveRequests(leavesData.queue.map((l: any) => ({
+          id: String(l.leave_id),
+          name: l.employee_name,
+          empId: l.employee_id || 'N/A',
+          department: l.department || 'N/A',
+          email: '',
+          type: l.leave_type,
+          dates: `${l.start_date} - ${l.end_date}`,
+          days: l.total_days,
+          reason: l.leave_reason
+        })));
+      }
+
+      const flaggedRes = await fetch('http://localhost:8000/api/v1/attendance/admin/flagged', { headers });
+      const flaggedData = await flaggedRes.json();
+      if (flaggedData.success && flaggedData.flagged_logs && flaggedData.flagged_logs.length > 0) {
+        const fetchedFlagged = flaggedData.flagged_logs.map((f: any) => ({
+          id: String(f.attendance_id),
+          name: f.employee_name || 'Employee',
+          time: new Date(f.check_in_time).toLocaleTimeString(),
+          note: f.admin_comment || 'Outside Geofence',
+          coordinates: `${f.check_in_latitude}, ${f.check_in_longitude}`,
+          empId: f.employee_id || 'N/A',
+          department: f.department || 'N/A',
+          photo: f.check_in_photo_url
+        }));
+        setFlaggedLogs([...fetchedFlagged, ...localFlagged]);
+      }
+    } catch (e) { }
   };
 
   useEffect(() => {
-    loadFlaggedLogs();
+    fetchAdminData();
+  }, [user, isKioskOpen]);
+
+  useEffect(() => {
     if (typeof window !== 'undefined' && user) {
       const raw = localStorage.getItem(`my_buddy_hrms_checkin_${user.user_id}`);
       setIsCheckedIn(!!raw);
@@ -85,11 +129,6 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
 
   if (!user) return null;
 
-  const leaveRequests: LeaveRequest[] = [
-    { id: '1', name: 'Priya Nair', empId: 'EMP-1042', department: 'Product Engineering', email: 'priya.nair@mybuddy.com', type: 'Paid Leave', dates: 'Aug 26–27', days: 2, reason: 'Family wedding event celebration with relatives.' },
-    { id: '2', name: 'Dev Kumar', empId: 'EMP-1048', department: 'Product Engineering', email: 'dev.kumar@mybuddy.com', type: 'Sick Leave', dates: 'Aug 23', days: 1, reason: 'High fever and doctor-advised rest.' },
-    { id: '3', name: 'Nisha Roy', empId: 'EMP-1055', department: 'Marketing', email: 'nisha.roy@mybuddy.com', type: 'Unpaid Leave', dates: 'Aug 29–31', days: 3, reason: 'Personal family emergency travel.' },
-  ];
 
   if (isAdmin) {
     // HR Admin Dashboard View

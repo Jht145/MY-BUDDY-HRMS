@@ -92,7 +92,7 @@ export function EmployeePayslipTab() {
     try {
       const token = localStorage.getItem('my_buddy_hrms_jwt_v4') || localStorage.getItem('hrms_token');
       if (token) {
-        const res = await fetch('/api/v1/payroll/my-payslips', {
+        const res = await fetch('http://localhost:8000/api/v1/payroll/my-payslips', {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {

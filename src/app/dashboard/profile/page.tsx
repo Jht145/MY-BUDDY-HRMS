@@ -60,7 +60,7 @@ export default function ProfilePage() {
     setIsSaving(true);
     try {
       const token = localStorage.getItem('my_buddy_hrms_jwt_v4');
-      const res = await fetch(`http://localhost:8000/api/v1/profile/self`, {
+      const res = await fetch(`/api/v1/profile/self`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({

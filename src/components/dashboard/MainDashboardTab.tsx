@@ -65,7 +65,7 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ action: action.toUpperCase(), admin_comment: `Admin ${action}` })
       });
-      const uniqueKey = `${selectedFlagged.name}-${flaggedLogs.findIndex(f => f.id === selectedFlagged.id)}`;
+      const uniqueKey = `${selectedFlagged.name}-${flaggedLogs.indexOf(selectedFlagged)}`;
       if (action === 'approve') {
         setReviewedCheckins((prev) => [...prev, uniqueKey]);
       } else {

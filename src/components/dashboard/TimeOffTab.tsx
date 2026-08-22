@@ -78,8 +78,12 @@ export function TimeOffTab() {
         setStartDate('');
         setEndDate('');
         setTimeout(() => setSubmitted(false), 4000);
+      } else {
+        const errData = await res.json();
+        alert(errData.detail?.message || errData.message || 'Failed to submit leave request.');
       }
-    } catch (err) {
+    } catch (err: any) {
+      alert(err.message || 'An error occurred.');
       console.error(err);
     }
   };

@@ -82,7 +82,7 @@ export function removeStoredToken(): void {
 }
 
 export async function loginUser(credentials: SignInCredentials): Promise<{ user: User; token: string }> {
-  const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+  const response = await fetch('/api/v1/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: credentials.email, password: credentials.password })
@@ -112,7 +112,7 @@ export async function registerUser(credentials: SignUpCredentials): Promise<{ us
 
   const role: UserRole = credentials.role || 'HR_ADMIN';
 
-  const response = await fetch('http://localhost:8000/api/v1/auth/register', {
+  const response = await fetch('/api/v1/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ 

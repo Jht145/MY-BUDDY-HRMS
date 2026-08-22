@@ -7,11 +7,13 @@ import { getStoredUsers } from '@/lib/auth';
 import { StoredUser } from '@/types/auth';
 import { EmployeeCard } from './EmployeeCard';
 import { EmployeeDetailModal } from './EmployeeDetailModal';
+import { AddEmployeeModal } from './AddEmployeeModal';
 
 export function EmployeesTab() {
   const { user } = useAuth();
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<StoredUser | null>(null);
+  const [isAddOpen, setIsAddOpen] = useState(false);
 
   const isAdmin = user?.role === 'HR_ADMIN';
 
@@ -73,7 +75,7 @@ export function EmployeesTab() {
               className="w-full h-9 pl-8 pr-3 text-sm bg-[var(--input-bg)] border border-[var(--input-border)] focus:border-[var(--brand-teal)] rounded-lg outline-none text-[var(--foreground)] placeholder:text-[var(--text-muted)]/60 transition-colors"
             />
           </div>
-          <button className="h-9 px-3.5 flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-sm">
+          <button onClick={() => setIsAddOpen(true)} className="h-9 px-3.5 flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-sm">
             <Plus className="w-3.5 h-3.5" />
             NEW
           </button>
@@ -133,6 +135,7 @@ export function EmployeesTab() {
 
       {/* Detail Modal */}
       <EmployeeDetailModal employee={selected} onClose={() => setSelected(null)} />
+      <AddEmployeeModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSuccess={() => { setIsAddOpen(false); window.location.reload(); }} />
     </div>
   );
 }

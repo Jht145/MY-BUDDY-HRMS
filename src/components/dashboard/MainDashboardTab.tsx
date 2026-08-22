@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { AttendanceKioskModal } from './AttendanceKioskModal';
 import {
@@ -18,6 +18,7 @@ interface FlaggedCheckin {
   coordinates: string;
   empId: string;
   department: string;
+  photo?: string;
 }
 
 interface LeaveRequest {
@@ -48,15 +49,35 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
   const [reviewedCheckins, setReviewedCheckins] = useState<string[]>([]);
   const [rejectedCheckins, setRejectedCheckins] = useState<string[]>([]);
 
-  if (!user) return null;
+  // Dynamic flagged check-ins state
+  const [flaggedLogs, setFlaggedLogs] = useState<FlaggedCheckin[]>([]);
 
-  // Mock datasets for Admin
-  const flaggedCheckins: FlaggedCheckin[] = [
-    { name: 'Rohan Mehta', time: '08:57 AM', note: '128m from permitted location', coordinates: '12.9729, 77.5958', empId: 'EMP-1043', department: 'Operations' },
-    { name: 'Fatima Ali', time: '09:06 AM', note: 'No location signal', coordinates: 'Unknown / Blocked', empId: 'EMP-1044', department: 'Finance' },
-    { name: 'Arjun Das', time: '09:18 AM', note: 'Camera image needs review', coordinates: '12.9716, 77.5946', empId: 'EMP-1045', department: 'Customer Success' },
-    { name: 'Dev Vashisht', time: '09:30 AM', note: 'Kiosk Geofence Bypass Warning', coordinates: '13.0827, 80.2707', empId: 'EMP-1088', department: 'Product Engineering' },
-  ];
+  // Load local storage flagged check-ins on mount & kiosk update
+  const loadFlaggedLogs = () => {
+    const mockCheckins: FlaggedCheckin[] = [
+      { name: 'Rohan Mehta', time: '08:57 AM', note: '128m from permitted location', coordinates: '12.9729, 77.5958', empId: 'EMP-1043', department: 'Operations' },
+      { name: 'Fatima Ali', time: '09:06 AM', note: 'No location signal', coordinates: 'Unknown / Blocked', empId: 'EMP-1044', department: 'Finance' },
+      { name: 'Arjun Das', time: '09:18 AM', note: 'Camera image needs review', coordinates: '12.9716, 77.5946', empId: 'EMP-1045', department: 'Customer Success' },
+      { name: 'Dev Vashisht', time: '09:30 AM', note: 'Kiosk Geofence Bypass Warning', coordinates: '13.0827, 80.2707', empId: 'EMP-1088', department: 'Product Engineering' },
+    ];
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem('my_buddy_hrms_flagged_checkins');
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          setFlaggedLogs([...parsed, ...mockCheckins]);
+          return;
+        } catch { /* ignore */ }
+      }
+    }
+    setFlaggedLogs(mockCheckins);
+  };
+
+  useEffect(() => {
+    loadFlaggedLogs();
+  }, [isKioskOpen]);
+
+  if (!user) return null;
 
   const leaveRequests: LeaveRequest[] = [
     { id: '1', name: 'Priya Nair', empId: 'EMP-1042', department: 'Product Engineering', email: 'priya.nair@mybuddy.com', type: 'Paid Leave', dates: 'Aug 26–27', days: 2, reason: 'Family wedding event celebration with relatives.' },
@@ -119,11 +140,12 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
               </button>
             </div>
             <div className="space-y-3.5">
-              {flaggedCheckins.slice(0, 3).map((item) => {
-                const isApproved = reviewedCheckins.includes(item.name);
-                const isRejected = rejectedCheckins.includes(item.name);
+              {flaggedLogs.slice(0, 3).map((item, index) => {
+                const uniqueKey = `${item.name}-${index}`;
+                const isApproved = reviewedCheckins.includes(uniqueKey);
+                const isRejected = rejectedCheckins.includes(uniqueKey);
                 return (
-                  <div key={item.name} className="flex items-start gap-3 rounded-lg border border-[var(--card-border)] p-3 bg-[var(--background)]/30">
+                  <div key={uniqueKey} className="flex items-start gap-3 rounded-lg border border-[var(--card-border)] p-3 bg-[var(--background)]/30">
                     <div className="grid h-8 w-8 place-items-center rounded-full bg-amber-500/10 font-bold text-xs text-amber-500 shrink-0">
                       {item.name[0]}
                     </div>
@@ -216,11 +238,12 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
                 </div>
               </div>
               <div className="p-5 max-h-[350px] overflow-y-auto space-y-3">
-                {flaggedCheckins.map((item) => {
-                  const isApproved = reviewedCheckins.includes(item.name);
-                  const isRejected = rejectedCheckins.includes(item.name);
+                {flaggedLogs.map((item, index) => {
+                  const uniqueKey = `${item.name}-${index}`;
+                  const isApproved = reviewedCheckins.includes(uniqueKey);
+                  const isRejected = rejectedCheckins.includes(uniqueKey);
                   return (
-                    <div key={item.name} className="flex items-center justify-between p-3 rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]">
+                    <div key={uniqueKey} className="flex items-center justify-between p-3 rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]">
                       <div>
                         <p className="text-xs font-bold text-[var(--foreground)]">{item.name}</p>
                         <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{item.time} · {item.note}</p>
@@ -266,15 +289,30 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
                 <div>
                   <p className="text-[9px] uppercase font-bold text-[var(--text-muted)]">Capture Telemetry</p>
                   <p className="font-bold text-[var(--foreground)] mt-0.5">Time: {selectedFlagged.time}</p>
-                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Flag note: {selectedFlagged.note}</p>
+                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5 font-semibold">Flag reason: {selectedFlagged.note}</p>
                   <p className="text-[10px] text-[var(--text-muted)] font-mono">Coordinates: {selectedFlagged.coordinates}</p>
                 </div>
+
+                {/* Webcam Image Evidence view */}
+                {selectedFlagged.photo && (
+                  <div>
+                    <p className="text-[9px] uppercase font-bold text-[var(--text-muted)] mb-1">Webcam Evidence Snapshot</p>
+                    <div className="relative aspect-video rounded-lg border border-[var(--card-border)] overflow-hidden bg-black flex items-center justify-center">
+                      <img
+                        src={selectedFlagged.photo}
+                        alt="Captured kiosk snapshot evidence"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-2 mt-5">
                 <button
                   onClick={() => {
-                    setReviewedCheckins((prev) => [...prev, selectedFlagged.name]);
+                    const uniqueKey = flaggedLogs.findIndex(f => f.name === selectedFlagged.name);
+                    setReviewedCheckins((prev) => [...prev, `${selectedFlagged.name}-${uniqueKey !== -1 ? uniqueKey : 0}`]);
                     setSelectedFlagged(null);
                   }}
                   className="flex-1 h-9 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs uppercase flex items-center justify-center gap-1.5 cursor-pointer"
@@ -283,7 +321,8 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
                 </button>
                 <button
                   onClick={() => {
-                    setRejectedCheckins((prev) => [...prev, selectedFlagged.name]);
+                    const uniqueKey = flaggedLogs.findIndex(f => f.name === selectedFlagged.name);
+                    setRejectedCheckins((prev) => [...prev, `${selectedFlagged.name}-${uniqueKey !== -1 ? uniqueKey : 0}`]);
                     setSelectedFlagged(null);
                   }}
                   className="flex-1 h-9 rounded-lg bg-red-500 hover:bg-red-600 text-white font-bold text-xs uppercase flex items-center justify-center gap-1.5 cursor-pointer"

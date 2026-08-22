@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Camera, MapPin, CheckCircle, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
@@ -18,6 +18,10 @@ export function AttendanceKioskModal({ isOpen, onClose, onCheckInSuccess }: Atte
   const [longitude, setLongitude] = useState<number | null>(null);
   const [accuracy, setAccuracy] = useState<string>('Detecting...');
   
+  // Real webcam refs
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
   // Simulation switches to help the user test within/outside geofence easily
   const [isWithinGeofence, setIsWithinGeofence] = useState<boolean>(true);
   const [feedback, setFeedback] = useState<{
@@ -37,7 +41,6 @@ export function AttendanceKioskModal({ isOpen, onClose, onCheckInSuccess }: Atte
           setAccuracy(`High Accuracy (±${Math.round(position.coords.accuracy)}m)`);
         },
         (error) => {
-          // Fallback to mock coordinates if blocked
           setLatitude(12.9716);
           setLongitude(77.5946);
           setAccuracy('Simulated coordinates (Location access denied)');
@@ -51,13 +54,69 @@ export function AttendanceKioskModal({ isOpen, onClose, onCheckInSuccess }: Atte
     }
   }, [isOpen]);
 
+  // Request Webcam Access and play video stream
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Reset capture states
+    setPhotoCaptured(null);
+
+    navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+      .then((stream) => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        streamRef.current = stream;
+      })
+      .catch((err) => {
+        console.error('Camera access denied or unavailable:', err);
+        setAccuracy('Camera Blocked / Not Detected');
+      });
+
+    return () => {
+      // Release camera tracks on close
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+    };
+  }, [isOpen]);
+
   const handleCapturePhoto = () => {
-    setIsCapturing(true);
-    setTimeout(() => {
-      // Simulate photo capture snapshot (base64 string placeholder)
-      setPhotoCaptured('/public/logo_light.png'); // Use any valid reference
+    if (videoRef.current && streamRef.current) {
+      setIsCapturing(true);
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const base64Photo = canvas.toDataURL('image/jpeg');
+        setPhotoCaptured(base64Photo);
+        
+        // Turn off camera tracks after capture
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+        }
+      }
       setIsCapturing(false);
-    }, 800);
+    }
+  };
+
+  const handleRetakePhoto = () => {
+    setPhotoCaptured(null);
+    navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+      .then((stream) => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        streamRef.current = stream;
+      })
+      .catch((err) => {
+        console.error('Camera access denied or unavailable:', err);
+      });
   };
 
   const handleCheckIn = () => {
@@ -77,6 +136,19 @@ export function AttendanceKioskModal({ isOpen, onClose, onCheckInSuccess }: Atte
         status: 'WARNING',
         message: 'Outside Office Radius. Submitted for Admin Approval.'
       });
+      // Save to flagged check-ins in localStorage
+      const flaggedRecord = {
+        name: user.name || `${user.first_name} ${user.last_name}`.trim(),
+        empId: user.employee_id,
+        department: user.department || 'Product Engineering',
+        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+        note: 'Outside Office Radius',
+        coordinates: `${latitude?.toFixed(6)}, ${longitude?.toFixed(6)}`,
+        photo: photoCaptured, // base64 captured photo!
+      };
+      const existingRaw = localStorage.getItem('my_buddy_hrms_flagged_checkins');
+      const existing = existingRaw ? JSON.parse(existingRaw) : [];
+      localStorage.setItem('my_buddy_hrms_flagged_checkins', JSON.stringify([flaggedRecord, ...existing]));
     }
 
     setTimeout(() => {
@@ -124,7 +196,7 @@ export function AttendanceKioskModal({ isOpen, onClose, onCheckInSuccess }: Atte
                     : 'bg-transparent border-[var(--card-border)] text-[var(--text-muted)]'
                 }`}
               >
-                Inside Office Geofence (Allowed)
+                Inside Office Geofence
               </button>
               <button
                 type="button"
@@ -135,39 +207,51 @@ export function AttendanceKioskModal({ isOpen, onClose, onCheckInSuccess }: Atte
                     : 'bg-transparent border-[var(--card-border)] text-[var(--text-muted)]'
                 }`}
               >
-                Outside Office (Flagged)
+                Outside Office
               </button>
             </div>
           </div>
 
-          {/* Webcam Viewfinder Simulation */}
+          {/* Webcam Viewfinder View */}
           <div className="relative aspect-video rounded-xl border border-[var(--card-border)] bg-black flex flex-col items-center justify-center overflow-hidden">
             {photoCaptured ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90 text-white gap-2 p-4">
-                <CheckCircle className="w-10 h-10 text-emerald-500" />
-                <p className="text-xs font-bold">Snapshot captured successfully!</p>
-                <button
-                  onClick={() => setPhotoCaptured(null)}
-                  className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-[10px] font-bold transition-colors"
-                >
-                  Retake Photo
-                </button>
+                <img
+                  src={photoCaptured}
+                  alt="Captured snapshot"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center gap-2 p-4">
+                  <CheckCircle className="w-10 h-10 text-emerald-500 filter drop-shadow-md" />
+                  <p className="text-xs font-bold filter drop-shadow-md">Snapshot captured successfully!</p>
+                  <button
+                    onClick={handleRetakePhoto}
+                    className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white rounded text-[10px] font-bold transition-colors cursor-pointer border border-white/10"
+                  >
+                    Retake Photo
+                  </button>
+                </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center text-center p-4 gap-3">
-                <Camera className="w-10 h-10 text-zinc-500 animate-pulse" />
-                <div>
-                  <p className="text-xs font-semibold text-zinc-400">Live Webcam Viewfinder</p>
-                  <p className="text-[10px] text-zinc-600 mt-0.5">Capturing: check_in_photo_url</p>
+              <div className="w-full h-full relative flex items-center justify-center">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={handleCapturePhoto}
+                    disabled={isCapturing}
+                    className="px-4 py-1.5 bg-[var(--brand-teal)] text-white hover:bg-[var(--brand-teal-hover)] text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow-md cursor-pointer border border-teal-500/20"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>{isCapturing ? 'Capturing...' : 'Capture Snapshot'}</span>
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleCapturePhoto}
-                  disabled={isCapturing}
-                  className="px-3 py-1.5 bg-[var(--brand-teal)] text-white hover:bg-[var(--brand-teal-hover)] text-xs font-bold rounded-lg transition-all"
-                >
-                  {isCapturing ? 'Capturing...' : 'Capture Snapshot'}
-                </button>
               </div>
             )}
           </div>
@@ -189,13 +273,13 @@ export function AttendanceKioskModal({ isOpen, onClose, onCheckInSuccess }: Atte
             <button
               onClick={handleCheckIn}
               disabled={!photoCaptured}
-              className="flex-1 h-10 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 h-10 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               Confirm Check-In
             </button>
             <button
               onClick={onClose}
-              className="px-4 h-10 bg-[var(--input-bg)] border border-[var(--card-border)] text-[var(--foreground)] font-bold text-xs uppercase rounded-lg hover:bg-[var(--card-border)]/20 transition-colors"
+              className="px-4 h-10 bg-[var(--input-bg)] border border-[var(--card-border)] text-[var(--foreground)] font-bold text-xs uppercase rounded-lg hover:bg-[var(--card-border)]/20 transition-colors cursor-pointer"
             >
               Cancel
             </button>

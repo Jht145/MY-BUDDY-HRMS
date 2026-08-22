@@ -3,15 +3,15 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { TopNav } from '@/components/dashboard/TopNav';
+import { TopNav, Tab } from '@/components/dashboard/TopNav';
 import { EmployeesTab } from '@/components/dashboard/EmployeesTab';
 import { AttendanceTab } from '@/components/dashboard/AttendanceTab';
 import { TimeOffTab } from '@/components/dashboard/TimeOffTab';
 import { MainDashboardTab } from '@/components/dashboard/MainDashboardTab';
+import { EmployeePayslipTab } from '@/components/dashboard/EmployeePayslipTab';
+import { AdminPayrollTab } from '@/components/dashboard/AdminPayrollTab';
 import { CheckInPanel } from '@/components/dashboard/CheckInPanel';
 import { Settings } from 'lucide-react';
-
-type Tab = 'dashboard' | 'employees' | 'attendance' | 'timeoff';
 
 export default function DashboardPage() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -32,6 +32,8 @@ export default function DashboardPage() {
     );
   }
 
+  const isAdmin = user.role === 'HR_ADMIN';
+
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex flex-col">
       {/* Top Navigation */}
@@ -46,6 +48,7 @@ export default function DashboardPage() {
             {activeTab === 'employees' && <EmployeesTab />}
             {activeTab === 'attendance' && <AttendanceTab />}
             {activeTab === 'timeoff' && <TimeOffTab />}
+            {activeTab === 'payroll' && (isAdmin ? <AdminPayrollTab /> : <EmployeePayslipTab />)}
           </div>
 
           {/* Settings link — bottom of content area */}

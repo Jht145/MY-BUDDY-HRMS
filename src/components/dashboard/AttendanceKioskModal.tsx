@@ -149,7 +149,7 @@ export function AttendanceKioskModal({ isOpen, onClose, mode, onSuccess }: Atten
 
     try {
       const token = localStorage.getItem('my_buddy_hrms_jwt_v4');
-      const response = await fetch(`http://localhost:8000${endpoint}`, {
+      const response = await fetch(`${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

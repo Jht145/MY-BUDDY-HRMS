@@ -37,7 +37,7 @@ export function TimeOffTab() {
       if (!user) return;
       try {
         const token = localStorage.getItem('my_buddy_hrms_jwt_v4');
-        const res = await fetch('http://localhost:8000/api/v1/leaves/my-requests', {
+        const res = await fetch('/api/v1/leaves/my-requests', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -63,7 +63,7 @@ export function TimeOffTab() {
     e.preventDefault();
     try {
       const token = localStorage.getItem('my_buddy_hrms_jwt_v4');
-      const res = await fetch('http://localhost:8000/api/v1/leaves/apply', {
+      const res = await fetch('/api/v1/leaves/apply', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

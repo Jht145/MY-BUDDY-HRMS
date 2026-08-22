@@ -76,7 +76,7 @@ export function EmployeeDetailModal({ employee, onClose }: EmployeeDetailModalPr
     setIsSaving(true);
     try {
       const token = localStorage.getItem('my_buddy_hrms_jwt_v4');
-      const res = await fetch(`http://localhost:8000/api/v1/profile/admin/${employee.user_id}`, {
+      const res = await fetch(`/api/v1/profile/admin/${employee.user_id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({

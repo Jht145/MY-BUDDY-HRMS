@@ -64,7 +64,7 @@ export function AttendanceTab() {
       if (!user) return;
       try {
         const token = localStorage.getItem('my_buddy_hrms_jwt_v4');
-        const res = await fetch('http://localhost:8000/api/v1/attendance/my-logs', {
+        const res = await fetch('/api/v1/attendance/my-logs', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -78,7 +78,7 @@ export function AttendanceTab() {
           setRecords(fetchedRecords);
         }
 
-        const leavesRes = await fetch('http://localhost:8000/api/v1/leaves/my-requests', {
+        const leavesRes = await fetch('/api/v1/leaves/my-requests', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const leavesData = await leavesRes.json();

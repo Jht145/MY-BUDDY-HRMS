@@ -22,7 +22,7 @@ export function EmployeesTab() {
     async function fetchUsers() {
       try {
         const token = localStorage.getItem('my_buddy_hrms_jwt_v4');
-        const res = await fetch('http://localhost:8000/api/v1/payroll/admin/overview', {
+        const res = await fetch('/api/v1/payroll/admin/overview', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();

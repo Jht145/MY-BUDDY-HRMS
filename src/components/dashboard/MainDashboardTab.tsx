@@ -60,7 +60,7 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
     if (!selectedFlagged) return;
     try {
       const token = localStorage.getItem('my_buddy_hrms_jwt_v4') || localStorage.getItem('hrms_token');
-      await fetch(`http://localhost:8000/api/v1/attendance/admin/verify/${selectedFlagged.id}`, {
+      await fetch(`/api/v1/attendance/admin/verify/${selectedFlagged.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ action: action.toUpperCase(), admin_comment: `Admin ${action}` })
@@ -101,7 +101,7 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
       const token = localStorage.getItem('my_buddy_hrms_jwt_v4');
       const headers = { 'Authorization': `Bearer ${token}` };
       
-      const leavesRes = await fetch('http://localhost:8000/api/v1/leaves/admin/queue', { headers });
+      const leavesRes = await fetch('/api/v1/leaves/admin/queue', { headers });
       const leavesData = await leavesRes.json();
       if (leavesData.success) {
         setLeaveRequests(leavesData.queue.map((l: any) => ({
@@ -117,7 +117,7 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
         })));
       }
 
-      const flaggedRes = await fetch('http://localhost:8000/api/v1/attendance/admin/flagged', { headers });
+      const flaggedRes = await fetch('/api/v1/attendance/admin/flagged', { headers });
       const flaggedData = await flaggedRes.json();
       if (flaggedData.success && flaggedData.flagged_logs && flaggedData.flagged_logs.length > 0) {
         const fetchedFlagged = flaggedData.flagged_logs.map((f: any) => ({

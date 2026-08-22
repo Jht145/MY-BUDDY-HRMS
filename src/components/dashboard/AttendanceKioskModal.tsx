@@ -117,13 +117,35 @@ export function AttendanceKioskModal({ isOpen, onClose, mode, onSuccess }: Atten
       });
   };
 
-  const handleConfirmAction = () => {
+  const handleConfirmAction = async () => {
     if (!user) return;
     
     const isCheckIn = mode === 'checkin';
     const actionLabel = isCheckIn ? 'Check-in' : 'Check-out';
     const statusNote = isCheckIn ? 'Outside Office Radius (Check-In)' : 'Outside Office Radius (Check-Out)';
     
+    setFeedback({
+      status: 'SUCCESS',
+      message: 'Saving verified snapshot to server...'
+    });
+
+    let uploadedPhotoUrl = '';
+    if (photoCaptured && photoCaptured.startsWith('data:image/')) {
+      try {
+        const res = await fetch('/api/checkin/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ photo: photoCaptured }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          uploadedPhotoUrl = data.url;
+        }
+      } catch (err) {
+        console.error('Failed to upload captured photo:', err);
+      }
+    }
+
     if (isWithinGeofence) {
       setFeedback({
         status: 'SUCCESS',
@@ -132,13 +154,11 @@ export function AttendanceKioskModal({ isOpen, onClose, mode, onSuccess }: Atten
       
       const CHECKIN_KEY = `my_buddy_hrms_checkin_${user.user_id}`;
       if (isCheckIn) {
-        // Save check-in record
-        const newRecord = { timestamp: Date.now(), date: new Date().toISOString().slice(0, 10) };
+        const newRecord = { timestamp: Date.now(), date: new Date().toISOString().slice(0, 10), photo: uploadedPhotoUrl };
         localStorage.setItem(CHECKIN_KEY, JSON.stringify(newRecord));
       } else {
-        // Save check-out (remove active check-in key, save into history)
         const activeRaw = localStorage.getItem(CHECKIN_KEY);
-        let checkInTimestamp = Date.now() - 8 * 3600000; // fallback 8 hours ago
+        let checkInTimestamp = Date.now() - 8 * 3600000;
         if (activeRaw) {
           try {
             checkInTimestamp = JSON.parse(activeRaw).timestamp;
@@ -151,7 +171,8 @@ export function AttendanceKioskModal({ isOpen, onClose, mode, onSuccess }: Atten
         const newLog = {
           date: new Date().toISOString().slice(0, 10),
           checkIn: checkInTimestamp,
-          checkOut: Date.now()
+          checkOut: Date.now(),
+          photo: uploadedPhotoUrl
         };
         
         localStorage.setItem(HISTORY_KEY, JSON.stringify([newLog, ...history]));
@@ -163,7 +184,6 @@ export function AttendanceKioskModal({ isOpen, onClose, mode, onSuccess }: Atten
         message: `Outside Office Radius. Submitted ${actionLabel} for Admin Approval.`
       });
       
-      // If outside geofence, save to flagged check-ins in localStorage
       const flaggedRecord = {
         name: user.name || `${user.first_name} ${user.last_name}`.trim(),
         empId: user.employee_id,
@@ -171,14 +191,13 @@ export function AttendanceKioskModal({ isOpen, onClose, mode, onSuccess }: Atten
         time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
         note: statusNote,
         coordinates: `${latitude?.toFixed(6)}, ${longitude?.toFixed(6)}`,
-        photo: photoCaptured,
+        photo: uploadedPhotoUrl || photoCaptured, // Save uploaded file URL!
       };
       
       const existingRaw = localStorage.getItem('my_buddy_hrms_flagged_checkins');
       const existing = existingRaw ? JSON.parse(existingRaw) : [];
       localStorage.setItem('my_buddy_hrms_flagged_checkins', JSON.stringify([flaggedRecord, ...existing]));
 
-      // Still update local storage state for checking in/out so the UI updates
       const CHECKIN_KEY = `my_buddy_hrms_checkin_${user.user_id}`;
       if (isCheckIn) {
         const newRecord = { timestamp: Date.now(), date: new Date().toISOString().slice(0, 10) };
@@ -193,7 +212,7 @@ export function AttendanceKioskModal({ isOpen, onClose, mode, onSuccess }: Atten
       onClose();
       setFeedback({ status: null, message: '' });
       setPhotoCaptured(null);
-    }, 2500);
+    }, 2000);
   };
 
   if (!isOpen) return null;

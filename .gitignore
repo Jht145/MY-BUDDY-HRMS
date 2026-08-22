@@ -1,0 +1,14 @@
+node_modules/
+.env
+hrms.db*
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.log
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/

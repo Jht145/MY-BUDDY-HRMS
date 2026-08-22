@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Buddy HRMS | Enterprise Core HR & Smart Kiosk</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Inactivity Warning Banner -->
+  <div id="inactivity-warning-bar" class="inactivity-bar" style="display: none;">
+    ⚠️ Inactivity Warning: You will be logged out in <span id="inactivity-countdown">15</span>s due to 2 minutes of idle time. Move mouse or press any key to stay logged in.
+  </div>
+
+  <!-- Top Navigation Bar -->
+  <header class="navbar">
+    <a href="#" class="brand">
+      <div class="brand-icon">MB</div>
+      <div>
+        <span>My Buddy HRMS</span>
+        <span class="brand-badge">Photo- & Location-Verified Kiosk System</span>
+      </div>
+    </a>
+    
+    <div class="nav-right">
+      <div id="rate-limit-pill" class="rate-limit-pill" title="API Sliding Window Rate Limit">
+        <span>⚡ API Quota: <strong id="rate-remaining">6</strong>/6 left</span>
+      </div>
+
+      <div id="nav-user" class="nav-user" style="display: none;">
+        <span id="session-timer-badge" class="session-timer-badge" title="Auto-logout after 2 minutes of inactivity">⏱️ Idle: <span id="idle-timer-text">0:00</span></span>
+        <span id="user-badge" class="user-badge">ROLE</span>
+        <span id="user-name" style="font-weight: 600; font-size: 0.9rem;">User</span>
+        <button id="btn-logout" class="btn btn-sm btn-outline">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="container">
+
+    <!-- 1. AUTHENTICATION VIEW (Login / Signup) -->
+    <section id="auth-view" class="view active">
+      <div class="auth-wrapper">
+        <div class="auth-header">
+          <h1>My Buddy HRMS</h1>
+          <p>Core HR Operations & Location-Aware Kiosk Portal</p>
+          <div class="security-pills-row">
+            <span class="sec-pill">📸 Camera Verification</span>
+            <span class="sec-pill">📍 Haversine Geofence</span>
+            <span class="sec-pill">🔒 3 Trials Lockout</span>
+            <span class="sec-pill">⏱️ 2-Min Idle Logout</span>
+          </div>
+        </div>
+
+        <div class="auth-tabs">
+          <button id="tab-login" class="auth-tab active">Sign In</button>
+          <button id="tab-signup" class="auth-tab">Register Staff</button>
+        </div>
+
+        <div class="auth-body">
+          
+          <!-- SIGN IN FORM -->
+          <div id="login-form-container">
+            <!-- Quick Demo Autofill Bar -->
+            <div class="quick-fill-bar">
+              <span>⚡ Quick Demo Accounts</span>
+              <div class="quick-fill-buttons">
+                <button type="button" id="btn-demo-admin" class="btn-pill">HR Admin (Sarah)</button>
+                <button type="button" id="btn-demo-employee" class="btn-pill">Employee (John)</button>
+              </div>
+            </div>
+
+            <div id="login-alert" class="alert"></div>
+
+            <form id="login-form">
+              <div class="form-group">
+                <label for="login-email" class="form-label">Work Email</label>
+                <input type="email" id="login-email" class="form-input" placeholder="you@mybuddyhrms.com" required autocomplete="email">
+              </div>
+
+              <div class="form-group">
+                <label for="login-password" class="form-label">Password</label>
+                <div class="password-input-wrapper">
+                  <input type="password" id="login-password" class="form-input" placeholder="••••••••" required autocomplete="current-password">
+                  <button type="button" id="toggle-login-pass" class="toggle-password" title="Toggle password visibility">👁️</button>
+                </div>
+              </div>
+
+              <button type="submit" id="btn-login-submit" class="btn btn-primary btn-block" style="margin-top: 1.25rem;">
+                Sign In to Portal
+              </button>
+            </form>
+          </div>
+
+          <!-- SIGN UP FORM -->
+          <div id="signup-form-container" style="display: none;">
+            <div id="signup-alert" class="alert"></div>
+
+            <form id="signup-form">
+              <div class="form-group">
+                <label for="signup-empid" class="form-label">Employee ID</label>
+                <input type="text" id="signup-empid" class="form-input" placeholder="e.g. EMP-105" required>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="signup-firstname" class="form-label">First Name</label>
+                  <input type="text" id="signup-firstname" class="form-input" placeholder="John" required>
+                </div>
+                <div class="form-group">
+                  <label for="signup-lastname" class="form-label">Last Name</label>
+                  <input type="text" id="signup-lastname" class="form-input" placeholder="Doe" required>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="signup-email" class="form-label">Work Email</label>
+                <input type="email" id="signup-email" class="form-input" placeholder="john.doe@mybuddyhrms.com" required autocomplete="email">
+              </div>
+
+              <div class="form-group">
+                <label for="signup-password" class="form-label">Password</label>
+                <div class="password-input-wrapper">
+                  <input type="password" id="signup-password" class="form-input" placeholder="Create strong password" required autocomplete="new-password">
+                  <button type="button" id="toggle-signup-pass" class="toggle-password" title="Toggle password visibility">👁️</button>
+                </div>
+
+                <!-- Live Password Strength Meter -->
+                <div class="strength-meter">
+                  <div class="strength-bar-bg">
+                    <div id="strength-bar" class="strength-bar-fill"></div>
+                  </div>
+                  <ul class="strength-checklist">
+                    <li id="chk-length" class="strength-item invalid">8+ characters</li>
+                    <li id="chk-upper" class="strength-item invalid">1 uppercase letter</li>
+                    <li id="chk-lower" class="strength-item invalid">1 lowercase letter</li>
+                    <li id="chk-number" class="strength-item invalid">1 number</li>
+                    <li id="chk-special" class="strength-item invalid" style="grid-column: span 2;">1 special symbol (!@#$%^&*)</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="signup-role" class="form-label">System Role</label>
+                <select id="signup-role" class="form-select" required>
+                  <option value="EMPLOYEE" selected>EMPLOYEE (Standard Staff)</option>
+                  <option value="HR_ADMIN">HR_ADMIN (HR Administrator)</option>
+                </select>
+              </div>
+
+              <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1.25rem;">
+                Create Account
+              </button>
+            </form>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+
+    <!-- 2. HR ADMIN PORTAL (ALL EMPLOYEES SCOPE) -->
+    <section id="admin-view" class="view">
+      <div class="dashboard-header">
+        <div class="dashboard-title">
+          <h2 id="admin-greeting">HR Administrator Control Center</h2>
+          <p>Complete organizational oversight, flagged attendance desk, leaves queue & payroll management</p>
+        </div>
+        <div>
+          <span class="badge badge-purple" style="font-size: 0.85rem; padding: 0.4rem 0.9rem;">
+            🛡️ Role: HR_ADMIN Privileges Active
+          </span>
+        </div>
+      </div>
+
+      <div id="admin-alert" class="alert"></div>
+
+      <!-- Admin Sub-Navigation Tabs -->
+      <div class="portal-nav-tabs">
+        <button class="portal-nav-tab active" onclick="switchAdminTab('overview')">📊 Overview & Metrics</button>
+        <button class="portal-nav-tab" onclick="switchAdminTab('flagged')">📸 Flagged Attendance Desk <span id="flagged-badge" class="tab-badge">0</span></button>
+        <button class="portal-nav-tab" onclick="switchAdminTab('directory')">👥 Employee Directory</button>
+        <button class="portal-nav-tab" onclick="switchAdminTab('leaves')">🌴 Leaves Approval Inbox <span id="leaves-badge" class="tab-badge">0</span></button>
+        <button class="portal-nav-tab" onclick="switchAdminTab('payroll')">💰 Payroll Management</button>
+      </div>
+
+      <!-- Tab 1: Overview -->
+      <div id="admin-tab-overview" class="admin-tab-content">
+        <div class="grid-cards">
+          <div class="stat-card">
+            <div class="stat-title">Total Staff Registered</div>
+            <div id="stat-total-staff" class="stat-value">0</div>
+            <div class="stat-subtitle">All organization accounts</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-title">Verified & Active</div>
+            <div id="stat-verified-staff" class="stat-value" style="color: var(--success);">0</div>
+            <div class="stat-subtitle">Email verified staff</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-title">Flagged Attendance</div>
+            <div id="stat-flagged-count" class="stat-value" style="color: var(--warning);">0</div>
+            <div class="stat-subtitle">Outside 100m geofence</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-title">Pending Leave Requests</div>
+            <div id="stat-pending-leaves" class="stat-value" style="color: #6366f1;">0</div>
+            <div class="stat-subtitle">Awaiting HR decision</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Flagged Attendance Desk -->
+      <div id="admin-tab-flagged" class="admin-tab-content" style="display: none;">
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">📸 Flagged Location Attendance Verification Desk</div>
+            <p style="font-size: 0.85rem; color: var(--slate-500);">Review webcam snapshots and GPS coordinates recorded outside the 100-meter office geofence.</p>
+          </div>
+          <div class="section-body">
+            <div id="flagged-cards-grid" class="flagged-grid">
+              <!-- Flagged attendance review cards injected here -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Employee Directory & Editor -->
+      <div id="admin-tab-directory" class="admin-tab-content" style="display: none;">
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">👥 Master Employee Directory</div>
+            <div class="section-filters">
+              <input type="text" id="admin-search-input" class="form-input" placeholder="Search staff..." style="width: 240px;">
+              <select id="admin-role-filter" class="form-select" style="width: 140px;">
+                <option value="">All Roles</option>
+                <option value="HR_ADMIN">HR_ADMIN</option>
+                <option value="EMPLOYEE">EMPLOYEE</option>
+              </select>
+            </div>
+          </div>
+          <div class="section-body" style="padding: 0;">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Employee ID</th>
+                    <th>Full Name</th>
+                    <th>Email</th>
+                    <th>Department</th>
+                    <th>Role</th>
+                    <th>Salary</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-emp-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 4: Leave Approvals Inbox -->
+      <div id="admin-tab-leaves" class="admin-tab-content" style="display: none;">
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">🌴 Leave & Time-Off Approvals Queue</div>
+          </div>
+          <div class="section-body" style="padding: 0;">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Type</th>
+                    <th>Dates</th>
+                    <th>Days</th>
+                    <th>Reason</th>
+                    <th>Balances</th>
+                    <th>Decision</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-leaves-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 5: Payroll Management -->
+      <div id="admin-tab-payroll" class="admin-tab-content" style="display: none;">
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">💰 Payroll Control Center</div>
+            <button class="btn btn-sm btn-primary" onclick="finalizePayrollCycle()">Commit Monthly Payroll</button>
+          </div>
+          <div class="section-body" style="padding: 0;">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Department</th>
+                    <th>Base Salary</th>
+                    <th>Allowances</th>
+                    <th>Deductions</th>
+                    <th>Net Pay</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-payroll-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- 3. EMPLOYEE PORTAL (STRICTLY USER-SCOPED) -->
+    <section id="employee-view" class="view">
+      <div class="dashboard-header">
+        <div class="dashboard-title">
+          <h2 id="emp-greeting">Employee Self-Service Portal</h2>
+          <p>Smart Kiosk Check-In, personal leave requests, payslips & profile management</p>
+        </div>
+        <div>
+          <span class="badge badge-info" style="font-size: 0.85rem; padding: 0.4rem 0.9rem;">
+            👤 Role: EMPLOYEE (Strictly Self-Scoped)
+          </span>
+        </div>
+      </div>
+
+      <!-- Employee Sub-Navigation Tabs -->
+      <div class="portal-nav-tabs">
+        <button class="portal-nav-tab active" onclick="switchEmpTab('overview')">📊 Overview</button>
+        <button class="portal-nav-tab" onclick="switchEmpTab('kiosk')">📸 Smart Kiosk Attendance</button>
+        <button class="portal-nav-tab" onclick="switchEmpTab('leaves')">🌴 Time-Off & Leaves</button>
+        <button class="portal-nav-tab" onclick="switchEmpTab('payslips')">💰 My Payslips</button>
+        <button class="portal-nav-tab" onclick="switchEmpTab('profile')">👤 My Profile</button>
+      </div>
+
+      <!-- Tab 1: Overview -->
+      <div id="emp-tab-overview" class="emp-tab-content">
+        <div class="grid-cards">
+          <div class="stat-card">
+            <div class="stat-title">Employee ID</div>
+            <div id="emp-id-display" class="stat-value" style="font-size: 1.5rem;">-</div>
+            <div id="emp-email-display" class="stat-subtitle">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-title">Today's Attendance</div>
+            <div id="emp-attendance-status" class="stat-value" style="font-size: 1.3rem; color: var(--success);">-</div>
+            <div class="stat-subtitle">Check-in: <span id="emp-checkin-time">-</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-title">Leave Balance</div>
+            <div class="stat-value" style="font-size: 1.3rem;">
+              <span id="emp-leave-paid-count">18</span> <small style="font-size: 0.75rem; color: var(--slate-500);">Paid Days</small>
+            </div>
+            <div class="stat-subtitle">Sick: <span id="emp-leave-sick-count">10</span> Days</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-title">Base Compensation</div>
+            <div id="emp-salary-display" class="stat-value" style="font-size: 1.3rem; color: var(--primary);">$0.00</div>
+            <div id="emp-dept-display" class="stat-subtitle">-</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Smart Kiosk Attendance System -->
+      <div id="emp-tab-kiosk" class="emp-tab-content" style="display: none;">
+        <div class="kiosk-container">
+          <div class="kiosk-camera-card">
+            <div class="section-title" style="margin-bottom: 0.5rem;">📸 Smart Kiosk Camera & GPS Verification</div>
+            <p style="font-size: 0.85rem; color: var(--slate-500); margin-bottom: 1rem;">
+              Point-of-interaction webcam snapshot + high-accuracy spatial coordinates evaluation.
+            </p>
+
+            <div class="camera-viewport">
+              <video id="kiosk-video" autoplay playsinline style="display: none;"></video>
+              <canvas id="kiosk-canvas" style="display: none;"></canvas>
+              <img id="kiosk-preview-img" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300" alt="Camera Snapshot" class="camera-preview">
+              <div class="camera-overlay-badge">📍 Geofence Target: Office (12.9716, 77.5946)</div>
+            </div>
+
+            <div class="location-box">
+              <div>📍 Coordinates: <strong id="kiosk-coords-display">12.9716, 77.5946</strong></div>
+              <div>📏 Haversine Distance: <strong id="kiosk-dist-display">0.0 meters</strong> (<span id="kiosk-geo-tag" style="color: var(--success); font-weight: 700;">Within 100m Geofence</span>)</div>
+            </div>
+
+            <div class="kiosk-presets">
+              <button type="button" class="btn-pill" onclick="setKioskLocationPreset('office')">🏢 At Office HQ (Within 100m)</button>
+              <button type="button" class="btn-pill" onclick="setKioskLocationPreset('remote')">🏡 Remote Location (Outside Geofence)</button>
+              <button type="button" class="btn-pill" onclick="captureLiveGPS()">📡 Detect Live GPS</button>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem; margin-top: 1.25rem;">
+              <button id="btn-kiosk-checkin" class="btn btn-primary btn-block" onclick="executeKioskCheckIn()">
+                📸 Record Photo Check-In
+              </button>
+              <button id="btn-kiosk-checkout" class="btn btn-outline" onclick="executeKioskCheckOut()">
+                🚪 Check-Out
+              </button>
+            </div>
+
+            <div id="kiosk-alert" class="alert" style="margin-top: 1rem;"></div>
+          </div>
+
+          <div class="kiosk-history-card">
+            <div class="section-title" style="margin-bottom: 0.5rem;">📜 Personal Attendance Logs</div>
+            <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Date & Time</th>
+                    <th>Photo</th>
+                    <th>Distance</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="emp-attendance-history-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Time-Off & Leaves -->
+      <div id="emp-tab-leaves" class="emp-tab-content" style="display: none;">
+        <div class="kiosk-container">
+          <div class="section-card" style="flex: 1;">
+            <div class="section-header">
+              <div class="section-title">🌴 Apply for Time-Off / Leave</div>
+            </div>
+            <div class="section-body">
+              <div id="emp-leave-alert" class="alert"></div>
+              <form id="emp-leave-form" onsubmit="submitLeaveApplication(event)">
+                <div class="form-group">
+                  <label class="form-label">Leave Category</label>
+                  <select id="leave-type-input" class="form-select" required>
+                    <option value="PAID">PAID (Annual Vacation)</option>
+                    <option value="SICK">SICK (Medical / Health)</option>
+                    <option value="UNPAID">UNPAID (Personal Leave)</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Start Date</label>
+                    <input type="date" id="leave-start-input" class="form-input" required>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">End Date</label>
+                    <input type="date" id="leave-end-input" class="form-input" required>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Reason / Supporting Note</label>
+                  <textarea id="leave-reason-input" class="form-input" rows="3" placeholder="State reason for absence..." required></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Submit Application to HR</button>
+              </form>
+            </div>
+          </div>
+
+          <div class="section-card" style="flex: 1.2;">
+            <div class="section-header">
+              <div class="section-title">📋 My Leave Applications Status</div>
+            </div>
+            <div class="section-body" style="padding: 0;">
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Dates</th>
+                      <th>Days</th>
+                      <th>Reason</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="emp-leaves-table-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 4: Payslips -->
+      <div id="emp-tab-payslips" class="emp-tab-content" style="display: none;">
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">💰 Monthly Itemized Payslips</div>
+          </div>
+          <div class="section-body">
+            <div id="payslips-cards-container" class="grid-cards"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 5: Profile Settings -->
+      <div id="emp-tab-profile" class="emp-tab-content" style="display: none;">
+        <div class="auth-wrapper" style="max-width: 600px; margin: 0 auto;">
+          <div class="section-header">
+            <div class="section-title">👤 Self-Service Profile Settings</div>
+          </div>
+          <div class="auth-body">
+            <div id="profile-alert" class="alert"></div>
+            <form onsubmit="submitSelfProfileUpdate(event)">
+              <div class="form-group">
+                <label class="form-label">Contact Phone</label>
+                <input type="text" id="prof-phone-input" class="form-input" placeholder="+1 (555) 000-0000">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Residential Address</label>
+                <input type="text" id="prof-address-input" class="form-input" placeholder="Address street, city">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Avatar / Photo URL</label>
+                <input type="text" id="prof-avatar-input" class="form-input" placeholder="https://...">
+              </div>
+              <button type="submit" class="btn btn-primary btn-block">Save Profile Changes</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Email Verification Modal -->
+  <div id="verify-modal" class="modal-overlay">
+    <div class="modal-card">
+      <h3 class="modal-title">✉️ Email Verification</h3>
+      <p class="modal-text">Enter or confirm your activation token to verify your account.</p>
+      <div id="verify-alert" class="alert"></div>
+      <div class="form-group">
+        <label for="verify-token-input" class="form-label">Verification Token</label>
+        <input type="text" id="verify-token-input" class="form-input" placeholder="Paste verification token">
+      </div>
+      <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem;">
+        <button type="button" id="btn-close-verify-modal" class="btn btn-outline">Cancel</button>
+        <button type="button" id="btn-submit-verify" class="btn btn-primary">Activate Account</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

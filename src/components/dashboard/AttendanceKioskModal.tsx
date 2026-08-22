@@ -7,10 +7,11 @@ import { useAuth } from '@/context/AuthContext';
 interface AttendanceKioskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCheckInSuccess?: () => void;
+  mode: 'checkin' | 'checkout';
+  onSuccess?: () => void;
 }
 
-export function AttendanceKioskModal({ isOpen, onClose, onCheckInSuccess }: AttendanceKioskModalProps) {
+export function AttendanceKioskModal({ isOpen, onClose, mode, onSuccess }: AttendanceKioskModalProps) {
   const { user } = useAuth();
   const [photoCaptured, setPhotoCaptured] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
@@ -58,7 +59,6 @@ export function AttendanceKioskModal({ isOpen, onClose, onCheckInSuccess }: Atte
   useEffect(() => {
     if (!isOpen) return;
 
-    // Reset capture states
     setPhotoCaptured(null);
 
     navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
@@ -74,7 +74,6 @@ export function AttendanceKioskModal({ isOpen, onClose, onCheckInSuccess }: Atte
       });
 
     return () => {
-      // Release camera tracks on close
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
@@ -95,7 +94,6 @@ export function AttendanceKioskModal({ isOpen, onClose, onCheckInSuccess }: Atte
         const base64Photo = canvas.toDataURL('image/jpeg');
         setPhotoCaptured(base64Photo);
         
-        // Turn off camera tracks after capture
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop());
           streamRef.current = null;
@@ -119,42 +117,80 @@ export function AttendanceKioskModal({ isOpen, onClose, onCheckInSuccess }: Atte
       });
   };
 
-  const handleCheckIn = () => {
+  const handleConfirmAction = () => {
     if (!user) return;
+    
+    const isCheckIn = mode === 'checkin';
+    const actionLabel = isCheckIn ? 'Check-in' : 'Check-out';
+    const statusNote = isCheckIn ? 'Outside Office Radius (Check-In)' : 'Outside Office Radius (Check-Out)';
     
     if (isWithinGeofence) {
       setFeedback({
         status: 'SUCCESS',
-        message: 'Location Verified. Check-in Auto-Approved!'
+        message: `Location Verified. ${actionLabel} Auto-Approved!`
       });
-      // Save record in localStorage
+      
       const CHECKIN_KEY = `my_buddy_hrms_checkin_${user.user_id}`;
-      const newRecord = { timestamp: Date.now(), date: new Date().toISOString().slice(0, 10) };
-      localStorage.setItem(CHECKIN_KEY, JSON.stringify(newRecord));
+      if (isCheckIn) {
+        // Save check-in record
+        const newRecord = { timestamp: Date.now(), date: new Date().toISOString().slice(0, 10) };
+        localStorage.setItem(CHECKIN_KEY, JSON.stringify(newRecord));
+      } else {
+        // Save check-out (remove active check-in key, save into history)
+        const activeRaw = localStorage.getItem(CHECKIN_KEY);
+        let checkInTimestamp = Date.now() - 8 * 3600000; // fallback 8 hours ago
+        if (activeRaw) {
+          try {
+            checkInTimestamp = JSON.parse(activeRaw).timestamp;
+          } catch { /* ignore */ }
+        }
+        
+        const HISTORY_KEY = `my_buddy_hrms_attendance_history_${user.user_id}`;
+        const historyRaw = localStorage.getItem(HISTORY_KEY);
+        const history = historyRaw ? JSON.parse(historyRaw) : [];
+        const newLog = {
+          date: new Date().toISOString().slice(0, 10),
+          checkIn: checkInTimestamp,
+          checkOut: Date.now()
+        };
+        
+        localStorage.setItem(HISTORY_KEY, JSON.stringify([newLog, ...history]));
+        localStorage.removeItem(CHECKIN_KEY);
+      }
     } else {
       setFeedback({
         status: 'WARNING',
-        message: 'Outside Office Radius. Submitted for Admin Approval.'
+        message: `Outside Office Radius. Submitted ${actionLabel} for Admin Approval.`
       });
-      // Save to flagged check-ins in localStorage
+      
+      // If outside geofence, save to flagged check-ins in localStorage
       const flaggedRecord = {
         name: user.name || `${user.first_name} ${user.last_name}`.trim(),
         empId: user.employee_id,
         department: user.department || 'Product Engineering',
         time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-        note: 'Outside Office Radius',
+        note: statusNote,
         coordinates: `${latitude?.toFixed(6)}, ${longitude?.toFixed(6)}`,
-        photo: photoCaptured, // base64 captured photo!
+        photo: photoCaptured,
       };
+      
       const existingRaw = localStorage.getItem('my_buddy_hrms_flagged_checkins');
       const existing = existingRaw ? JSON.parse(existingRaw) : [];
       localStorage.setItem('my_buddy_hrms_flagged_checkins', JSON.stringify([flaggedRecord, ...existing]));
+
+      // Still update local storage state for checking in/out so the UI updates
+      const CHECKIN_KEY = `my_buddy_hrms_checkin_${user.user_id}`;
+      if (isCheckIn) {
+        const newRecord = { timestamp: Date.now(), date: new Date().toISOString().slice(0, 10) };
+        localStorage.setItem(CHECKIN_KEY, JSON.stringify(newRecord));
+      } else {
+        localStorage.removeItem(CHECKIN_KEY);
+      }
     }
 
     setTimeout(() => {
-      onCheckInSuccess?.();
+      onSuccess?.();
       onClose();
-      // Reset feedback
       setFeedback({ status: null, message: '' });
       setPhotoCaptured(null);
     }, 2500);
@@ -177,15 +213,17 @@ export function AttendanceKioskModal({ isOpen, onClose, onCheckInSuccess }: Atte
         <div className="p-5 border-b border-[var(--card-border)] flex items-center gap-2">
           <ShieldCheck className="w-5 h-5 text-[var(--brand-teal)]" />
           <div>
-            <h3 className="text-sm font-bold text-[var(--foreground)]">Smart Kiosk Attendance</h3>
+            <h3 className="text-sm font-bold text-[var(--foreground)]">
+              Smart Kiosk {mode === 'checkin' ? 'Check-In' : 'Check-Out'}
+            </h3>
             <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Real-time, photo &amp; geofence-verified kiosk checkout</p>
           </div>
         </div>
 
         <div className="p-5 space-y-4">
-          {/* Geofence simulation selector (interactive toggle for user testing) */}
+          {/* Geofence simulation selector */}
           <div className="flex items-center justify-between p-2.5 rounded-lg bg-[var(--input-bg)] border border-[var(--card-border)] text-xs">
-            <span className="font-semibold text-[var(--foreground)]">Simulate Kiosk Position:</span>
+            <span className="font-semibold text-[var(--foreground)]">Simulate Position:</span>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -212,7 +250,7 @@ export function AttendanceKioskModal({ isOpen, onClose, onCheckInSuccess }: Atte
             </div>
           </div>
 
-          {/* Webcam Viewfinder View */}
+          {/* Webcam Viewfinder */}
           <div className="relative aspect-video rounded-xl border border-[var(--card-border)] bg-black flex flex-col items-center justify-center overflow-hidden">
             {photoCaptured ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90 text-white gap-2 p-4">
@@ -271,11 +309,11 @@ export function AttendanceKioskModal({ isOpen, onClose, onCheckInSuccess }: Atte
           {/* Action buttons */}
           <div className="flex gap-2 pt-2">
             <button
-              onClick={handleCheckIn}
+              onClick={handleConfirmAction}
               disabled={!photoCaptured}
               className="flex-1 h-10 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
-              Confirm Check-In
+              Confirm {mode === 'checkin' ? 'Check-In' : 'Check-Out'}
             </button>
             <button
               onClick={onClose}

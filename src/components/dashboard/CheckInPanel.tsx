@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { AttendanceKioskModal } from './AttendanceKioskModal';
 
 const CHECKIN_KEY = (userId: string) => `my_buddy_hrms_checkin_${userId}`;
 
@@ -42,10 +43,12 @@ export function CheckInPanel({ onStatusChange }: CheckInPanelProps) {
   const { user } = useAuth();
   const [record, setRecord] = useState<CheckInRecord | null>(null);
   const [elapsed, setElapsed] = useState(0);
-  const [justCheckedIn, setJustCheckedIn] = useState(false);
+  
+  // Kiosk Modal trigger states
+  const [isKioskOpen, setIsKioskOpen] = useState(false);
+  const [kioskMode, setKioskMode] = useState<'checkin' | 'checkout'>('checkin');
 
-  // Load stored record on mount
-  useEffect(() => {
+  const syncStatus = useCallback(() => {
     if (!user) return;
     const raw = localStorage.getItem(CHECKIN_KEY(user.user_id));
     if (raw) {
@@ -54,14 +57,18 @@ export function CheckInPanel({ onStatusChange }: CheckInPanelProps) {
         if (parsed.date === getToday()) {
           setRecord(parsed);
           onStatusChange?.('PRESENT');
-        } else {
-          localStorage.removeItem(CHECKIN_KEY(user.user_id));
+          return;
         }
-      } catch {
-        // ignore
-      }
+      } catch { /* ignore */ }
     }
+    setRecord(null);
+    onStatusChange?.('ABSENT');
   }, [user, onStatusChange]);
+
+  // Load stored record on mount
+  useEffect(() => {
+    syncStatus();
+  }, [syncStatus]);
 
   // Tick elapsed timer
   useEffect(() => {
@@ -72,23 +79,19 @@ export function CheckInPanel({ onStatusChange }: CheckInPanelProps) {
     return () => clearInterval(id);
   }, [record]);
 
-  const handleCheckIn = useCallback(() => {
-    if (!user || record) return;
-    const newRecord: CheckInRecord = { timestamp: Date.now(), date: getToday() };
-    localStorage.setItem(CHECKIN_KEY(user.user_id), JSON.stringify(newRecord));
-    setRecord(newRecord);
-    setJustCheckedIn(true);
-    onStatusChange?.('PRESENT');
-    setTimeout(() => setJustCheckedIn(false), 2000);
-  }, [user, record, onStatusChange]);
+  const triggerCheckInKiosk = () => {
+    setKioskMode('checkin');
+    setIsKioskOpen(true);
+  };
 
-  const handleCheckOut = useCallback(() => {
-    if (!user || !record) return;
-    localStorage.removeItem(CHECKIN_KEY(user.user_id));
-    setRecord(null);
-    setElapsed(0);
-    onStatusChange?.('ABSENT');
-  }, [user, record, onStatusChange]);
+  const triggerCheckOutKiosk = () => {
+    setKioskMode('checkout');
+    setIsKioskOpen(true);
+  };
+
+  const handleKioskSuccess = () => {
+    syncStatus();
+  };
 
   const isCheckedIn = !!record;
 
@@ -110,13 +113,13 @@ export function CheckInPanel({ onStatusChange }: CheckInPanelProps) {
 
       {/* Check In button */}
       <button
-        onClick={handleCheckIn}
+        onClick={triggerCheckInKiosk}
         disabled={isCheckedIn}
         className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg border text-sm font-semibold transition-all ${
           isCheckedIn
             ? 'border-[var(--card-border)] text-[var(--text-muted)] bg-[var(--input-bg)] cursor-not-allowed opacity-50'
             : 'border-[var(--brand-teal)] text-[var(--brand-teal)] hover:bg-[var(--brand-teal)] hover:text-white cursor-pointer'
-        } ${justCheckedIn ? 'scale-95' : ''}`}
+        }`}
       >
         <span>Check In</span>
         <ArrowRight className="w-4 h-4" />
@@ -134,7 +137,7 @@ export function CheckInPanel({ onStatusChange }: CheckInPanelProps) {
 
       {/* Check Out button */}
       <button
-        onClick={handleCheckOut}
+        onClick={triggerCheckOutKiosk}
         disabled={!isCheckedIn}
         className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg border text-sm font-semibold transition-all ${
           !isCheckedIn
@@ -145,6 +148,14 @@ export function CheckInPanel({ onStatusChange }: CheckInPanelProps) {
         <span>Check Out</span>
         <ArrowRight className="w-4 h-4" />
       </button>
+
+      {/* Embedded Kiosk Modal triggered by Check In / Check Out */}
+      <AttendanceKioskModal
+        isOpen={isKioskOpen}
+        onClose={() => setIsKioskOpen(false)}
+        mode={kioskMode}
+        onSuccess={handleKioskSuccess}
+      />
     </div>
   );
 }

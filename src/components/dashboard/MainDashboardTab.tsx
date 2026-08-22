@@ -39,9 +39,11 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
 
   // Modal States
   const [isKioskOpen, setIsKioskOpen] = useState(false);
+  const [kioskMode, setKioskMode] = useState<'checkin' | 'checkout'>('checkin');
   const [isFlaggedViewAllOpen, setIsFlaggedViewAllOpen] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState<LeaveRequest | null>(null);
   const [selectedFlagged, setSelectedFlagged] = useState<FlaggedCheckin | null>(null);
+  const [isCheckedIn, setIsCheckedIn] = useState(false);
 
   // Simulated Action State Lists
   const [approvedRequests, setApprovedRequests] = useState<string[]>([]);
@@ -75,7 +77,11 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
 
   useEffect(() => {
     loadFlaggedLogs();
-  }, [isKioskOpen]);
+    if (typeof window !== 'undefined' && user) {
+      const raw = localStorage.getItem(`my_buddy_hrms_checkin_${user.user_id}`);
+      setIsCheckedIn(!!raw);
+    }
+  }, [isKioskOpen, user]);
 
   if (!user) return null;
 
@@ -101,13 +107,6 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
             </p>
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={() => setIsKioskOpen(true)}
-              className="h-9 px-4 border border-[var(--brand-teal)] text-[var(--brand-teal)] hover:bg-[var(--brand-teal)] hover:text-white text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
-            >
-              <Camera className="w-3.5 h-3.5" />
-              Smart Kiosk
-            </button>
             <button
               onClick={() => onNavigateToTab('employees')}
               className="h-9 px-4 bg-[var(--brand-teal)] hover:bg-[var(--brand-teal-hover)] text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
@@ -393,7 +392,7 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
         )}
 
         {/* Shared smart kiosk modal */}
-        <AttendanceKioskModal isOpen={isKioskOpen} onClose={() => setIsKioskOpen(false)} />
+        <AttendanceKioskModal isOpen={isKioskOpen} onClose={() => setIsKioskOpen(false)} mode={kioskMode} />
       </div>
     );
   }
@@ -414,13 +413,6 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
             Here is your workday summary at a glance.
           </p>
         </div>
-        <button
-          onClick={() => setIsKioskOpen(true)}
-          className="h-9 px-4 bg-[var(--brand-teal)] hover:bg-[var(--brand-teal-hover)] text-white text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm"
-        >
-          <Camera className="w-3.5 h-3.5" />
-          Smart Kiosk
-        </button>
       </div>
 
       {/* 4 Stats Grid */}
@@ -465,9 +457,12 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
             <div className="grid gap-3">
               <QuickAction
                 icon={<Camera className="w-4 h-4 text-[var(--brand-teal)]" />}
-                title="Kiosk attendance"
+                title={isCheckedIn ? 'Kiosk Check-Out' : 'Kiosk Check-In'}
                 text="Verify camera & GPS"
-                onClick={() => setIsKioskOpen(true)}
+                onClick={() => {
+                  setKioskMode(isCheckedIn ? 'checkout' : 'checkin');
+                  setIsKioskOpen(true);
+                }}
               />
               <QuickAction
                 icon={<CalendarDays className="w-4 h-4 text-[var(--brand-teal)]" />}
@@ -509,7 +504,7 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
       </section>
 
       {/* Shared smart kiosk modal */}
-      <AttendanceKioskModal isOpen={isKioskOpen} onClose={() => setIsKioskOpen(false)} />
+      <AttendanceKioskModal isOpen={isKioskOpen} onClose={() => setIsKioskOpen(false)} mode={kioskMode} />
     </div>
   );
 }

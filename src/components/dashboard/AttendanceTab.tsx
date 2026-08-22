@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { getStoredUsers } from '@/lib/auth';
 import { INITIAL_LEAVES } from '@/lib/mock-data';
 import {
-  ChevronLeft, ChevronRight, Clock, CheckCircle2, AlertTriangle, Plane, CalendarDays
+  ChevronLeft, ChevronRight, Clock, CheckCircle2, AlertTriangle, Plane, CalendarDays, X, UserCheck, UserMinus
 } from 'lucide-react';
 
 interface AttendanceRecord {
@@ -22,7 +23,7 @@ function formatTimeShort(ts: number): string {
   const minutes = date.getMinutes().toString().padStart(2, '0');
   const ampm = hours >= 12 ? 'P' : 'A';
   hours = hours % 12;
-  hours = hours ? hours : 12; // the hour '0' should be '12'
+  hours = hours ? hours : 12;
   return `${hours}:${minutes}${ampm}`;
 }
 
@@ -47,6 +48,13 @@ export function AttendanceTab() {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [selectedDayRecord, setSelectedDayRecord] = useState<AttendanceRecord | null>(null);
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
+  const [selectedDateISO, setSelectedDateISO] = useState<string | null>(null);
+
+  // Admin report modal states
+  const [isAdminReportOpen, setIsAdminReportOpen] = useState(false);
+  const [activeReportTab, setActiveReportTab] = useState<'present' | 'absent'>('present');
+
+  const isAdmin = user?.role === 'HR_ADMIN';
 
   // Load and merge history/mock records
   useEffect(() => {
@@ -137,12 +145,14 @@ export function AttendanceTab() {
     setCurrentDate(new Date(year, month - 1, 1));
     setSelectedDayRecord(null);
     setSelectedDateStr(null);
+    setSelectedDateISO(null);
   };
 
   const nextMonth = () => {
     setCurrentDate(new Date(year, month + 1, 1));
     setSelectedDayRecord(null);
     setSelectedDateStr(null);
+    setSelectedDateISO(null);
   };
 
   const getDayState = (date: Date) => {
@@ -184,24 +194,112 @@ export function AttendanceTab() {
     const dateStr = date.toISOString().slice(0, 10);
     const state = getDayState(date);
     
-    setSelectedDateStr(date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }));
+    const label = date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    setSelectedDateStr(label);
+    setSelectedDateISO(dateStr);
     
-    if (state.type === 'PRESENT' || state.type === 'ACTIVE') {
-      setSelectedDayRecord(state.record);
+    if (isAdmin) {
+      setIsAdminReportOpen(true);
     } else {
-      setSelectedDayRecord({
-        date: dateStr,
-        checkIn: null,
-        checkOut: null,
-      });
+      if (state.type === 'PRESENT' || state.type === 'ACTIVE') {
+        setSelectedDayRecord(state.record);
+      } else {
+        setSelectedDayRecord({
+          date: dateStr,
+          checkIn: null,
+          checkOut: null,
+        });
+      }
     }
   };
+
+  // Compile presentees and absentees dynamically for the selected date
+  const dailyReport = useMemo(() => {
+    if (!selectedDateISO) return { present: [], absent: [] };
+
+    const allUsers = getStoredUsers();
+    const present: any[] = [];
+    const absent: any[] = [];
+
+    allUsers.forEach((u) => {
+      // 1. Check Approved Leaves
+      const leave = INITIAL_LEAVES.find(
+        (l) => l.userId === u.user_id &&
+        l.status === 'APPROVED' &&
+        selectedDateISO >= l.startDate &&
+        selectedDateISO <= l.endDate
+      );
+
+      // 2. Check local database
+      const checkinKey = `my_buddy_hrms_checkin_${u.user_id}`;
+      const historyKey = `my_buddy_hrms_attendance_history_${u.user_id}`;
+      
+      let matchedRecord: any = null;
+
+      if (selectedDateISO === new Date().toISOString().slice(0, 10)) {
+        const rawToday = localStorage.getItem(checkinKey);
+        if (rawToday) {
+          try {
+            const parsed = JSON.parse(rawToday);
+            matchedRecord = { checkIn: parsed.timestamp, checkOut: null };
+          } catch {}
+        }
+      }
+
+      if (!matchedRecord) {
+        const rawHistory = localStorage.getItem(historyKey);
+        if (rawHistory) {
+          try {
+            const parsed = JSON.parse(rawHistory);
+            const found = parsed.find((r: any) => r.date === selectedDateISO);
+            if (found) {
+              matchedRecord = found;
+            }
+          } catch {}
+        }
+      }
+
+      // Fallback generator for realistic seed users
+      if (!matchedRecord && !leave) {
+        const dateObj = new Date(selectedDateISO);
+        if (dateObj.getDay() !== 0) { // skip Sundays
+          const idNum = parseInt(u.user_id.replace(/\D/g, '')) || 0;
+          const isPresentMock = (idNum + dateObj.getDate()) % 3 !== 0;
+          if (isPresentMock) {
+            const checkInTime = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 9, Math.floor(Math.random() * 30)).getTime();
+            matchedRecord = {
+              checkIn: checkInTime,
+              checkOut: checkInTime + 8.5 * 3600000
+            };
+          }
+        }
+      }
+
+      if (matchedRecord) {
+        present.push({
+          user: u,
+          checkIn: matchedRecord.checkIn,
+          checkOut: matchedRecord.checkOut
+        });
+      } else {
+        absent.push({
+          user: u,
+          onLeave: !!leave,
+          leaveReason: leave?.reason
+        });
+      }
+    });
+
+    return { present, absent };
+  }, [selectedDateISO]);
 
   return (
     <div className="flex flex-col gap-5">
       <div>
         <h2 className="text-sm font-bold text-[var(--foreground)]">Attendance Calendar</h2>
-        <p className="text-[11px] text-[var(--text-muted)] mt-0.5">Visual representation of your workday history</p>
+        <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+          {isAdmin ? 'Click on any day to view complete presentee/absentee lists.' : 'Visual representation of your workday history'}
+        </p>
       </div>
 
       <div className="grid lg:grid-cols-[1.4fr_0.6fr] gap-5 items-start">
@@ -289,7 +387,6 @@ export function AttendanceTab() {
                   <span className="text-[8px] tracking-wide text-[var(--text-muted)]/50 mt-2 font-bold uppercase">Off</span>
                 );
               } else {
-                // Future dates
                 cellClass = 'bg-transparent border-[var(--card-border)] text-[var(--text-muted)] opacity-35 hover:bg-[var(--input-bg)]';
               }
 
@@ -343,7 +440,17 @@ export function AttendanceTab() {
                 <p className="text-xs font-bold text-[var(--foreground)] mt-0.5">{selectedDateStr}</p>
               </div>
 
-              {selectedDayRecord?.checkIn ? (
+              {isAdmin ? (
+                <div>
+                  <button
+                    onClick={() => setIsAdminReportOpen(true)}
+                    className="w-full h-9 bg-[var(--brand-teal)] hover:bg-[var(--brand-teal-hover)] text-white text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <CalendarDays className="w-4 h-4" />
+                    Open Headcount Modals
+                  </button>
+                </div>
+              ) : selectedDayRecord?.checkIn ? (
                 <div className="space-y-3.5">
                   <div className="flex items-start gap-2.5">
                     <Clock className="w-3.5 h-3.5 text-[var(--brand-teal)] mt-0.5" />
@@ -422,6 +529,104 @@ export function AttendanceTab() {
           )}
         </div>
       </div>
+
+      {/* FLOATING WINDOW: HR Admin daily attendance report (Presentees / Absentees) */}
+      {isAdminReportOpen && selectedDateStr && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="relative w-full max-w-lg bg-[var(--card)] border border-[var(--card-border)] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[500px]">
+            {/* Close */}
+            <button
+              onClick={() => setIsAdminReportOpen(false)}
+              className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--foreground)] transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Header */}
+            <div className="p-5 border-b border-[var(--card-border)] bg-[var(--input-bg)]">
+              <h3 className="text-sm font-bold text-[var(--foreground)]">Attendance Log: {selectedDateStr}</h3>
+              <p className="text-[10px] text-[var(--text-muted)] mt-0.5">Company-wide head-count summary exceptions report</p>
+            </div>
+
+            {/* Tab switchers */}
+            <div className="flex border-b border-[var(--card-border)]">
+              <button
+                onClick={() => setActiveReportTab('present')}
+                className={`flex-1 py-3 text-xs font-bold border-b-2 flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  activeReportTab === 'present'
+                    ? 'border-[var(--brand-teal)] text-[var(--brand-teal)] bg-[var(--brand-teal)]/5'
+                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--foreground)]'
+                }`}
+              >
+                <UserCheck className="w-4 h-4" />
+                Present ({dailyReport.present.length})
+              </button>
+              <button
+                onClick={() => setActiveReportTab('absent')}
+                className={`flex-1 py-3 text-xs font-bold border-b-2 flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  activeReportTab === 'absent'
+                    ? 'border-red-500 text-red-500 bg-red-500/5'
+                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--foreground)]'
+                }`}
+              >
+                <UserMinus className="w-4 h-4" />
+                Absent ({dailyReport.absent.length})
+              </button>
+            </div>
+
+            {/* List container */}
+            <div className="p-5 overflow-y-auto flex-1 space-y-3 bg-[var(--card)]">
+              {activeReportTab === 'present' ? (
+                dailyReport.present.length === 0 ? (
+                  <p className="text-xs text-[var(--text-muted)] text-center py-8">No employees were present on this date.</p>
+                ) : (
+                  dailyReport.present.map((item: any) => (
+                    <div key={item.user.user_id} className="flex items-center justify-between p-3 rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/40 hover:bg-[var(--input-bg)] transition-colors">
+                      <div>
+                        <p className="text-xs font-bold text-[var(--foreground)]">{item.user.name || `${item.user.first_name} ${item.user.last_name}`.trim()}</p>
+                        <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{item.user.employee_id} · {item.user.job_title}</p>
+                      </div>
+                      <div className="text-right text-[10px]">
+                        <p className="text-emerald-500 font-bold flex items-center gap-1 justify-end">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          Present
+                        </p>
+                        <p className="text-[9px] text-[var(--text-muted)] mt-0.5">
+                          In: {formatTimeShort(item.checkIn)} {item.checkOut ? `· Out: ${formatTimeShort(item.checkOut)}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )
+              ) : (
+                dailyReport.absent.length === 0 ? (
+                  <p className="text-xs text-[var(--text-muted)] text-center py-8">No absentees on this date.</p>
+                ) : (
+                  dailyReport.absent.map((item: any) => (
+                    <div key={item.user.user_id} className="flex items-center justify-between p-3 rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/40 hover:bg-[var(--input-bg)] transition-colors">
+                      <div>
+                        <p className="text-xs font-bold text-[var(--foreground)]">{item.user.name || `${item.user.first_name} ${item.user.last_name}`.trim()}</p>
+                        <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{item.user.employee_id} · {item.user.job_title}</p>
+                      </div>
+                      <div className="text-right text-[10px]">
+                        {item.onLeave ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-500 font-bold text-[9px] uppercase tracking-wide">
+                            <Plane className="w-2.5 h-2.5" /> Leave
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 font-bold text-[9px] uppercase tracking-wide">
+                            Absent
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

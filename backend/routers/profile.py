@@ -6,6 +6,7 @@ from typing import Optional
 from backend.db import get_db
 from backend.middleware import get_current_user, require_role
 from backend.schemas import EmployeeSelfProfileUpdateSchema, AdminProfileUpdateSchema
+from backend.utils.salary_calculator import compute_salary_breakdown
 
 router = APIRouter(
     prefix="/api/v1/profile",
@@ -155,28 +156,79 @@ async def admin_update_profile(
         updates.append("leave_balance_sick = ?")
         params.append(payload.leave_balance_sick)
 
-    # Compensation calculation logic
-    base = payload.salary_base if payload.salary_base is not None else float(target["salary_base"] or 5000.0)
-    allow = payload.salary_allowances if payload.salary_allowances is not None else float(target["salary_allowances"] or 500.0)
-    ded = payload.salary_deductions if payload.salary_deductions is not None else float(target["salary_deductions"] or 250.0)
-    net = round(base + allow - ded, 2)
+    # Compensation calculation logic using 6-step calculation engine
+    wage_input = payload.monthly_wage if payload.monthly_wage is not None else payload.salary_base
 
-    if payload.salary_base is not None or payload.salary_allowances is not None or payload.salary_deductions is not None:
-        updates.append("salary_base = ?")
-        params.append(base)
-        updates.append("salary_allowances = ?")
-        params.append(allow)
-        updates.append("salary_deductions = ?")
-        params.append(ded)
-        updates.append("net_salary = ?")
-        params.append(net)
+    if wage_input is not None or payload.salary_allowances is not None or payload.salary_deductions is not None:
+        if payload.monthly_wage is None and payload.salary_allowances is not None and payload.salary_deductions is not None:
+            base = float(payload.salary_base if payload.salary_base is not None else target["salary_base"] or 5000.0)
+            allow = float(payload.salary_allowances)
+            ded = float(payload.salary_deductions)
+            net = round(base + allow - ded, 2)
+            calc = compute_salary_breakdown(base)
+            calc["salary_base"] = base
+            calc["salary_allowances"] = allow
+            calc["salary_deductions"] = ded
+            calc["net_salary"] = net
+        else:
+            calc = compute_salary_breakdown(
+                monthly_wage=wage_input if wage_input is not None else float(target["salary_base"] or 5000.0),
+                basic_pct=payload.basic_pct or 0.50,
+                hra_pct=payload.hra_pct or 0.50,
+                standard_allowance_pct=payload.standard_allowance_pct or 0.05,
+                performance_bonus_pct=payload.performance_bonus_pct or 0.05,
+                lta_pct=payload.lta_pct or 0.05,
+                pf_pct=payload.pf_pct or 0.12,
+                professional_tax=payload.professional_tax or 200.00
+            )
+
+        updates.extend([
+            "monthly_wage = ?", "basic_salary = ?", "hra = ?", "standard_allowance = ?",
+            "performance_bonus = ?", "lta = ?", "fixed_allowance = ?", "pf_employee = ?",
+            "pf_employer = ?", "professional_tax = ?", "salary_config = ?",
+            "salary_base = ?", "salary_allowances = ?", "salary_deductions = ?", "net_salary = ?"
+        ])
+        params.extend([
+            calc["monthly_wage"], calc["basic_salary"], calc["hra"], calc["standard_allowance"],
+            calc["performance_bonus"], calc["lta"], calc["fixed_allowance"], calc["pf_employee"],
+            calc["pf_employer"], calc["professional_tax"], calc["salary_config"],
+            calc["salary_base"], calc["salary_allowances"], calc["salary_deductions"], calc["net_salary"]
+        ])
 
         # Update matching payroll table record
-        cursor.execute("""
-            UPDATE payroll 
-            SET salary_base = ?, salary_allowances = ?, salary_deductions = ?, net_salary = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE user_id = ?
-        """, (base, allow, ded, net, target_user_id))
+        cursor.execute("SELECT payroll_id FROM payroll WHERE user_id = ?", (target_user_id,))
+        if cursor.fetchone():
+            cursor.execute("""
+                UPDATE payroll 
+                SET monthly_wage = ?, basic_salary = ?, hra = ?, standard_allowance = ?,
+                    performance_bonus = ?, lta = ?, fixed_allowance = ?, pf_employee = ?,
+                    pf_employer = ?, professional_tax = ?, salary_config = ?,
+                    salary_base = ?, salary_allowances = ?, salary_deductions = ?, net_salary = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE user_id = ?
+            """, (
+                calc["monthly_wage"], calc["basic_salary"], calc["hra"], calc["standard_allowance"],
+                calc["performance_bonus"], calc["lta"], calc["fixed_allowance"], calc["pf_employee"],
+                calc["pf_employer"], calc["professional_tax"], calc["salary_config"],
+                calc["salary_base"], calc["salary_allowances"], calc["salary_deductions"], calc["net_salary"],
+                target_user_id
+            ))
+        else:
+            cursor.execute("""
+                INSERT INTO payroll (
+                    user_id, monthly_wage, basic_salary, hra, standard_allowance,
+                    performance_bonus, lta, fixed_allowance, pf_employee, pf_employer,
+                    professional_tax, salary_config, salary_base, salary_allowances,
+                    salary_deductions, net_salary
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                target_user_id,
+                calc["monthly_wage"], calc["basic_salary"], calc["hra"], calc["standard_allowance"],
+                calc["performance_bonus"], calc["lta"], calc["fixed_allowance"], calc["pf_employee"],
+                calc["pf_employer"], calc["professional_tax"], calc["salary_config"],
+                calc["salary_base"], calc["salary_allowances"], calc["salary_deductions"], calc["net_salary"]
+            ))
 
     if not updates:
         return {"success": True, "message": "No administrative updates provided."}
@@ -187,12 +239,16 @@ async def admin_update_profile(
     cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
     db.commit()
 
+    # Re-fetch for response
+    cursor.execute("SELECT salary_base, net_salary FROM users WHERE id = ?", (target_user_id,))
+    final_u = cursor.fetchone()
+
     return {
         "success": True,
         "message": f"Administrative updates applied to employee {target['email']}.",
         "data": {
             "user_id": target_user_id,
-            "salary_base": base,
-            "net_salary": net
+            "salary_base": float(final_u["salary_base"]),
+            "net_salary": float(final_u["net_salary"])
         }
     }

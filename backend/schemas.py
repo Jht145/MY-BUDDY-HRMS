@@ -31,9 +31,17 @@ class AdminProfileUpdateSchema(BaseModel):
     job_title: Optional[str] = None
     department: Optional[str] = None
     documents_url: Optional[str] = None
+    monthly_wage: Optional[float] = None
     salary_base: Optional[float] = None
     salary_allowances: Optional[float] = None
     salary_deductions: Optional[float] = None
+    basic_pct: Optional[float] = None
+    hra_pct: Optional[float] = None
+    standard_allowance_pct: Optional[float] = None
+    performance_bonus_pct: Optional[float] = None
+    lta_pct: Optional[float] = None
+    pf_pct: Optional[float] = None
+    professional_tax: Optional[float] = None
     leave_balance_paid: Optional[int] = None
     leave_balance_sick: Optional[int] = None
 
@@ -61,8 +69,16 @@ class AdminActionLeaveSchema(BaseModel):
     leave_status: Literal["APPROVED", "REJECTED"]
     admin_comment: Optional[str] = None
 
-# Payroll Schemas
+# Payroll Schemas (Phase 1 & 2 Granular Salary Engine)
 class AdminAdjustPayrollSchema(BaseModel):
-    salary_base: float = Field(..., ge=0)
-    salary_allowances: float = Field(default=0.0, ge=0)
-    salary_deductions: float = Field(default=0.0, ge=0)
+    monthly_wage: Optional[float] = Field(default=None, ge=0)
+    salary_base: Optional[float] = Field(default=None, ge=0)
+    salary_allowances: Optional[float] = Field(default=None, ge=0)
+    salary_deductions: Optional[float] = Field(default=None, ge=0)
+    basic_pct: Optional[float] = Field(default=0.50, ge=0, le=1.0)
+    hra_pct: Optional[float] = Field(default=0.50, ge=0, le=1.0)
+    standard_allowance_pct: Optional[float] = Field(default=0.05, ge=0, le=1.0)
+    performance_bonus_pct: Optional[float] = Field(default=0.05, ge=0, le=1.0)
+    lta_pct: Optional[float] = Field(default=0.05, ge=0, le=1.0)
+    pf_pct: Optional[float] = Field(default=0.12, ge=0, le=1.0)
+    professional_tax: Optional[float] = Field(default=200.00, ge=0)

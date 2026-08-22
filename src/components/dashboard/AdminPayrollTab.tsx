@@ -152,7 +152,7 @@ export function AdminPayrollTab() {
     try {
       const token = localStorage.getItem('my_buddy_hrms_jwt_v4') || localStorage.getItem('hrms_token');
       if (token) {
-        const res = await fetch('/api/v1/payroll/admin/overview', {
+        const res = await fetch('http://localhost:8000/api/v1/payroll/admin/overview', {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
@@ -224,7 +224,7 @@ export function AdminPayrollTab() {
     try {
       const token = localStorage.getItem('my_buddy_hrms_jwt_v4') || localStorage.getItem('hrms_token');
       if (token) {
-        await fetch(`/api/v1/payroll/admin/adjust/${editingEmployee.user_id}`, {
+        await fetch(`http://localhost:8000/api/v1/payroll/admin/adjust/${editingEmployee.user_id}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',

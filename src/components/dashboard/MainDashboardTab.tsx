@@ -103,8 +103,8 @@ export function MainDashboardTab({ onNavigateToTab }: MainDashboardTabProps) {
       
       const leavesRes = await fetch('/api/v1/leaves/admin/queue', { headers });
       const leavesData = await leavesRes.json();
-      if (leavesData.success) {
-        setLeaveRequests(leavesData.queue.map((l: any) => ({
+      if (leavesData.success && leavesData.pending_queue) {
+        setLeaveRequests(leavesData.pending_queue.map((l: any) => ({
           id: String(l.leave_id),
           name: l.employee_name,
           empId: l.employee_id || 'N/A',
